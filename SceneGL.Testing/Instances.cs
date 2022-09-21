@@ -47,7 +47,8 @@ namespace SceneGL.Testing
 
         private static uint s_instanceBuffer;
         private static uint s_sceneDataBuffer;
-
+        private static uint s_materialDataBuffer;
+        private static MaterialShader? s_materialShader;
         private static RenderableModel? s_model;
 
         private static ShaderProgram? s_shaderProgram;
@@ -89,7 +90,11 @@ namespace SceneGL.Testing
             "Instances.frag",
             ShaderType.FragmentShader,
             @"#version 330
-                uniform vec4 uColor;
+                layout (std140) uniform ubMaterial
+                {
+                    vec4 uColor;
+                };
+                
                 uniform sampler2D uTex;
 
                 in vec2 vTexCoord;
@@ -116,6 +121,11 @@ namespace SceneGL.Testing
 
             s_instanceBuffer = gl.GenBuffer();
             s_sceneDataBuffer = gl.GenBuffer();
+            s_materialDataBuffer = gl.GenBuffer();
+            s_materialShader = new MaterialShader(s_shaderProgram, 
+                sceneBlockBinding: "ubScene",
+                materialBlockBinding: "ubMaterial",
+                instanceDataBlock: ("ubInstanceData", 1000));
 
             //texture
             {
@@ -297,106 +307,53 @@ namespace SceneGL.Testing
             #endregion
         }
 
-        public static void Render(GL gl, ref Vector4 color, in Matrix4x4 viewProjection, ReadOnlySpan<InstanceData> instanceData)
+        public unsafe static void Render(GL gl, ref Vector4 color, in Matrix4x4 viewProjection, ReadOnlySpan<InstanceData> instanceData)
         {
             if (!s_initialized)
                 throw new InvalidOperationException($@"{nameof(ColoredTriangle)} must be initialized before any calls to {nameof(Render)}");
 
 
-            if (s_shaderProgram!.TryUse(gl, out uint program))
+            gl.BindBuffer(BufferTargetARB.UniformBuffer, s_instanceBuffer);
+            gl.BufferData(BufferTargetARB.UniformBuffer, instanceData, BufferUsageARB.DynamicDraw);
+            gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
+
+            unsafe
             {
-                int nextFreeUnit = 0;
-                uint nextFreeBlockBinding = 0;
+                gl.BindBuffer(BufferTargetARB.UniformBuffer, s_sceneDataBuffer);
+                gl.BufferData(BufferTargetARB.UniformBuffer, (nuint)sizeof(Matrix4x4), viewProjection, BufferUsageARB.DynamicDraw);
+                gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
+            }
 
-                if (s_shaderProgram.TryGetUniformLoc("uColor", out int loc))
+            unsafe
+            {
+                gl.BindBuffer(BufferTargetARB.UniformBuffer, s_materialDataBuffer);
+                gl.BufferData(BufferTargetARB.UniformBuffer, (nuint)sizeof(Vector4), in color, BufferUsageARB.DynamicDraw);
+                gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
+            }
+            
+            if (s_materialShader!.TryUse(gl,
+                sceneData: new BufferRange(s_sceneDataBuffer, 0, (uint)sizeof(Matrix4x4)),
+                materialData: new BufferRange(s_materialDataBuffer, 0, (uint)sizeof(Vector4)),
+                otherUBOData: Array.Empty<BufferBinding>(),
+                new SamplerBinding[]
                 {
-                    gl.Uniform4(loc, ref color);
-                }
-
-                if (s_shaderProgram.TryGetUniformLoc("uTex", out loc))
-                {
-                    gl.BindTextureUnit((uint)nextFreeUnit, s_texture);
-                    gl.BindSampler((uint)nextFreeUnit, s_sampler);
-                    gl.Uniform1(loc, nextFreeUnit);
-
-                    nextFreeUnit++;
-                }
-
-
-                bool usesInstanceData = false;
-
-                uint instanceDataBlockBinding = uint.MaxValue;
-
-                if (s_shaderProgram.TryGetUniformBlockIndex("ubInstanceData", out uint blockIndex))
-                {
-                    gl.BindBuffer(BufferTargetARB.UniformBuffer, s_instanceBuffer);
-                    gl.BufferData(BufferTargetARB.UniformBuffer, instanceData, BufferUsageARB.DynamicDraw);
-                    gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
-
-
-                    usesInstanceData = true;
-                    instanceDataBlockBinding = nextFreeBlockBinding;
-
-                    gl.UniformBlockBinding(program, blockIndex, nextFreeBlockBinding);
-                    nextFreeBlockBinding++;
-                }
-
-                if (s_shaderProgram.TryGetUniformBlockIndex("ubScene", out blockIndex))
-                {
-                    Span<float> floats = stackalloc float[4 * 4];
-
-                    {
-                        
-
-                        int i = 0;
-                        var mtx = viewProjection;
-
-                        floats[i++] = mtx.M11;
-                        floats[i++] = mtx.M12;
-                        floats[i++] = mtx.M13;
-                        floats[i++] = mtx.M14;
-
-                        floats[i++] = mtx.M21;
-                        floats[i++] = mtx.M22;
-                        floats[i++] = mtx.M23;
-                        floats[i++] = mtx.M24;
-
-                        floats[i++] = mtx.M31;
-                        floats[i++] = mtx.M32;
-                        floats[i++] = mtx.M33;
-                        floats[i++] = mtx.M34;
-
-                        floats[i++] = mtx.M41;
-                        floats[i++] = mtx.M42;
-                        floats[i++] = mtx.M43;
-                        floats[i++] = mtx.M44;
-                    }
-
-                    gl.BindBuffer(BufferTargetARB.UniformBuffer, s_sceneDataBuffer);
-                    gl.BufferData<float>(BufferTargetARB.UniformBuffer, floats, BufferUsageARB.DynamicDraw);
-                    gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
-
-                    gl.UniformBlockBinding(program, blockIndex, nextFreeBlockBinding);
-
-                    gl.BindBufferBase(BufferTargetARB.UniformBuffer, nextFreeBlockBinding, s_sceneDataBuffer);
-                    nextFreeBlockBinding++;
-                }
-
-                if (usesInstanceData)
+                            new ("uTex", s_sampler, s_texture)
+                },
+                out uint? instanceBlockIndex
+                ))
+            {
+                if (instanceBlockIndex.HasValue)
                 {
                     //gl.GetInteger(GetPName.MaxUniformBlockSize, out int maxBlockSize);
 
+                    uint maxInstanceCount = s_materialShader.MaxInstanceCount!.Value;
 
-
-                    unsafe
+                    for (int i = 0; i < (instanceData.Length+maxInstanceCount-1) / maxInstanceCount; i++)
                     {
-                        for (int i = 0; i < (instanceData.Length+999)/1000; i++)
-                        {
-                            gl.BindBufferRange(BufferTargetARB.UniformBuffer, instanceDataBlockBinding, s_instanceBuffer, 
-                                i * (sizeof(InstanceData) * 1000), (nuint)(sizeof(InstanceData) * 1000));
+                        gl.BindBufferRange(BufferTargetARB.UniformBuffer, instanceBlockIndex.Value, s_instanceBuffer,
+                            (nint)(i * (sizeof(InstanceData) * maxInstanceCount)), (nuint)(sizeof(InstanceData) * maxInstanceCount));
 
-                            s_model!.Draw(gl, 1000);
-                        }
+                        s_model!.Draw(gl, maxInstanceCount);
                     }
                 }
                 else
@@ -414,7 +371,6 @@ namespace SceneGL.Testing
             {
                 Debugger.Break();
             }
-
         }
 
         public static void CleanUp(GL gl)
