@@ -31,8 +31,9 @@ namespace SceneGL
             _instanceDataBlock = instanceDataBlock;
         }
 
-        public bool TryUse(GL gl, BufferRange sceneData, BufferRange materialData,BufferBinding[] otherUBOData,
-            SamplerBinding[] samplers, out uint? instanceBlockIndex)
+        public bool TryUse(GL gl, BufferRange sceneData, BufferRange materialData, IReadOnlyList<SamplerBinding> materialSamplers,
+            IReadOnlyList<BufferBinding>? otherUBOData,
+            IReadOnlyList<SamplerBinding>? otherSamplers, out uint? instanceBlockIndex)
         {
             instanceBlockIndex = null;
 
@@ -60,10 +61,14 @@ namespace SceneGL
             BindUniformBlockBufferRange(_sceneBlockBinding, sceneData);
             BindUniformBlockBufferRange(_materialBlockBinding, materialData);
 
-            foreach (var (name, bufferRange) in otherUBOData)
+            if (otherUBOData != null)
             {
-                BindUniformBlockBufferRange(name, bufferRange);
+                foreach (var (name, bufferRange) in otherUBOData)
+                {
+                    BindUniformBlockBufferRange(name, bufferRange);
+                }
             }
+            
 
             if (_instanceDataBlock.HasValue)
             {
@@ -74,6 +79,11 @@ namespace SceneGL
                     instanceBlockIndex = nextFreeBlockBinding;
                 }
             }
+
+            IEnumerable<SamplerBinding> samplers = materialSamplers;
+
+            if(otherSamplers!=null)
+                samplers = samplers.Concat(otherSamplers);
 
             foreach (var (name, sampler, texture) in samplers)
             {

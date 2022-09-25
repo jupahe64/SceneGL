@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace SceneGL.Util
 {
-    public static class BitUtils
+    internal static class BitUtils
     {
         public static IEnumerable<int> AllSetBits(ushort bits)
         {

@@ -50,6 +50,7 @@ namespace SceneGL.Testing
         private bool _isSceneHoveredBeforeDrag;
 
         private List<Instances.InstanceData> _instanceData;
+        private Material<Vector4>? _material;
 
         public TestWindow()
         {
@@ -223,6 +224,8 @@ namespace SceneGL.Testing
             ColoredTriangle.Initialize(_gl);
             Instances.Initialize(_gl);
             InfiniteGrid.Initialize(_gl);
+
+            _material = Instances.CreateMaterial(_color);
         }
 
         private void Update(double deltaSeconds)
@@ -403,7 +406,10 @@ namespace SceneGL.Testing
                 ImGui.DragFloat3("Scale", ref _transform_scale, 0.01f);
 
                 ImGui.SetNextItemWidth(150);
-                ImGui.ColorPicker4("Color", ref _color);
+                if(ImGui.ColorPicker4("Color", ref _color))
+                {
+                    _material!.SetData(_color);
+                }
             }
 
 
@@ -536,7 +542,7 @@ namespace SceneGL.Testing
 
             //for (int i = 0; i < 10000; i++)
             {
-                Instances.Render(_gl, ref _color, in _viewProjection, CollectionsMarshal.AsSpan(_instanceData));
+                Instances.Render(_gl, _material, in _viewProjection, CollectionsMarshal.AsSpan(_instanceData));
             }
             
             //ColoredTriangle.Render(_gl, ref _color, in _transform, in _viewProjection);

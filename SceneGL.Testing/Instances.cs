@@ -307,10 +307,21 @@ namespace SceneGL.Testing
             #endregion
         }
 
-        public unsafe static void Render(GL gl, ref Vector4 color, in Matrix4x4 viewProjection, ReadOnlySpan<InstanceData> instanceData)
+        public static Material<Vector4> CreateMaterial(Vector4 color)
         {
             if (!s_initialized)
-                throw new InvalidOperationException($@"{nameof(ColoredTriangle)} must be initialized before any calls to {nameof(Render)}");
+                throw new InvalidOperationException($@"{nameof(Instances)} must be initialized before any calls to {nameof(CreateMaterial)}");
+
+            return new Material<Vector4>(color, new SamplerBinding[]
+            {
+                new SamplerBinding("uTex", s_sampler, s_texture)
+            });
+        }
+
+        public unsafe static void Render(GL gl, Material material, in Matrix4x4 viewProjection, ReadOnlySpan<InstanceData> instanceData)
+        {
+            if (!s_initialized)
+                throw new InvalidOperationException($@"{nameof(Instances)} must be initialized before any calls to {nameof(Render)}");
 
 
             gl.BindBuffer(BufferTargetARB.UniformBuffer, s_instanceBuffer);
@@ -323,22 +334,13 @@ namespace SceneGL.Testing
                 gl.BufferData(BufferTargetARB.UniformBuffer, (nuint)sizeof(Matrix4x4), viewProjection, BufferUsageARB.DynamicDraw);
                 gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
             }
-
-            unsafe
-            {
-                gl.BindBuffer(BufferTargetARB.UniformBuffer, s_materialDataBuffer);
-                gl.BufferData(BufferTargetARB.UniformBuffer, (nuint)sizeof(Vector4), in color, BufferUsageARB.DynamicDraw);
-                gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
-            }
             
             if (s_materialShader!.TryUse(gl,
                 sceneData: new BufferRange(s_sceneDataBuffer, 0, (uint)sizeof(Matrix4x4)),
-                materialData: new BufferRange(s_materialDataBuffer, 0, (uint)sizeof(Vector4)),
-                otherUBOData: Array.Empty<BufferBinding>(),
-                new SamplerBinding[]
-                {
-                            new ("uTex", s_sampler, s_texture)
-                },
+                materialData: material.GetDataBuffer(gl),
+                materialSamplers:  material.Samplers,
+                otherUBOData: null,
+                otherSamplers: null,
                 out uint? instanceBlockIndex
                 ))
             {

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace SceneGL.Util
 {
-    public static class DictionaryExtensions
+    internal static class DictionaryExtensions
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TValue GetOrCreate<TKey, TValue>(this Dictionary<TKey, TValue> self, TKey key) 
@@ -29,7 +29,7 @@ namespace SceneGL.Util
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static TValue GetOrCreate<TKey, TValue>(this Dictionary<TKey, TValue> self, TKey key, Func<TValue> creator)
+        internal static TValue GetOrCreate<TKey, TValue>(this Dictionary<TKey, TValue> self, TKey key, Func<TValue> creator)
             where TKey : notnull
         {
             if (self.TryGetValue(key, out TValue? value))
