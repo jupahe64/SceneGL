@@ -74,14 +74,23 @@ namespace SceneGL.Testing
 
                 out vec2 vTexCoord;
                 out vec4 vColor;
+                out float vColorFade;
 
                 void main() {
                     vTexCoord = aTexCoord;
                     vColor = aColor;
 
+                    vec3 centerPos = uInstanceData[gl_InstanceID]*vec4(0.0, 0.0, 0.0, 1.0);
+                    vec4 centerPosProj = uViewProjection*vec4(centerPos, 1.0);
+
                     vec3 pos = uInstanceData[gl_InstanceID]*vec4(aPosition, 1.0);
 
-                    gl_Position = uViewProjection*vec4(pos, 1.0);
+                    float scaleFade = clamp(abs(centerPosProj.w*0.3-12)-9,0.0,1.0);
+                    vColorFade = clamp(abs(centerPosProj.w*0.3-12)-8.5,0.0,1.0);
+
+                    vec3 finalPos = mix(pos, centerPos, scaleFade);
+
+                    gl_Position = uViewProjection*vec4(finalPos, 1.0);
                 }
                 "
             );
@@ -99,12 +108,14 @@ namespace SceneGL.Testing
 
                 in vec2 vTexCoord;
                 in vec4 vColor;
+                in float vColorFade;
 
                 out vec4 oColor;
 
                 void main() {
                     vec4 tex = texture(uTex, vTexCoord);
                     oColor = vColor+uColor+tex*tex.a*0.1;
+                    oColor = mix(oColor, vec4(1.0), vColorFade);
                 }
                 "
             );

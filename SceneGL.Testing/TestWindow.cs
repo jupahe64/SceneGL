@@ -542,7 +542,7 @@ namespace SceneGL.Testing
 
             //for (int i = 0; i < 10000; i++)
             {
-                Instances.Render(_gl, _material, in _viewProjection, CollectionsMarshal.AsSpan(_instanceData));
+                Instances.Render(_gl, _material!, in _viewProjection, CollectionsMarshal.AsSpan(_instanceData));
             }
             
             //ColoredTriangle.Render(_gl, ref _color, in _transform, in _viewProjection);
