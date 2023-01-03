@@ -104,33 +104,9 @@ namespace SceneGL
         }
     }
 
-    public struct TriangleU16
-    {
-        public ushort IndexA;
-        public ushort IndexB;
-        public ushort IndexC;
-
-        public TriangleU16(ushort indexA, ushort indexB, ushort indexC)
-        {
-            IndexA = indexA;
-            IndexB = indexB;
-            IndexC = indexC;
-        }
-    }
-
-    public struct TriangleU32
-    {
-        public uint IndexA;
-        public uint IndexB;
-        public uint IndexC;
-
-        public TriangleU32(uint indexA, uint indexB, uint indexC)
-        {
-            IndexA = indexA;
-            IndexB = indexB;
-            IndexC = indexC;
-        }
-    }
+    public record struct TriangleU8(byte IndexA, byte IndexB, byte IndexC);
+    public record struct TriangleU16(ushort IndexA, ushort IndexB, ushort IndexC);
+    public record struct TriangleU32(uint IndexA, uint IndexB, uint IndexC);
 
     public class RenderableModel
     {
@@ -165,10 +141,23 @@ namespace SceneGL
 
             DrawElementsType drawElementsType;
 
-            if (indexType == typeof(ushort))
+            if (indexType == typeof(byte))
+            {
+                drawElementsType = DrawElementsType.UnsignedByte;
+            }
+            else if (indexType == typeof(ushort))
+            {
                 drawElementsType = DrawElementsType.UnsignedShort;
+            }
             else if (indexType == typeof(uint))
+            {
                 drawElementsType = DrawElementsType.UnsignedInt;
+            }
+            else if (indexType == typeof(TriangleU8))
+            {
+                drawElementsType = DrawElementsType.UnsignedByte;
+                indicesPerElement = 3;
+            }
             else if(indexType == typeof(TriangleU16))
             {
                 drawElementsType = DrawElementsType.UnsignedShort;
