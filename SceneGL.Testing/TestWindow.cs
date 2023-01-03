@@ -91,10 +91,10 @@ namespace SceneGL.Testing
                 if(win32 is not null)
                 {
                     var (hWnd, _, _) = win32.Value;
-                WindowsDarkmodeUtil.SetDarkmodeAware(hWnd);
+                    WindowsDarkmodeUtil.SetDarkmodeAware(hWnd);
                 }
-
                 
+
                 //prevent windows from freezing when resizing/moving
                 _window.Resize += (size) =>
                 {
@@ -199,10 +199,11 @@ namespace SceneGL.Testing
 
             Debug.Assert(_gl != null);
 
-            _gl.Enable(EnableCap.DebugOutput);
+            bool isDebugLogSupported = _gl.IsExtensionPresent("GL_ARB_debug_output");
 
-            if (_gl.IsExtensionPresent("GL_ARB_debug_output"))
+            if (isDebugLogSupported)
             {
+                _gl.Enable(EnableCap.DebugOutput);
                 _gl.DebugMessageCallback(
                 (source, type, id, severity, length, message, _) =>
                 {
@@ -231,6 +232,13 @@ namespace SceneGL.Testing
             InfiniteGrid.Initialize(_gl);
 
             _material = Instances.CreateMaterial(_color);
+
+            if (isDebugLogSupported)
+            {
+                //prevent Buffer info message from spamming the debug console
+                _gl.DebugMessageControl(DebugSource.DebugSourceApi, DebugType.DebugTypeOther, DebugSeverity.DontCare,
+                    stackalloc[] { (uint)131185 }, false);
+            }
         }
 
         private void Update(double deltaSeconds)
@@ -543,13 +551,13 @@ namespace SceneGL.Testing
             _gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
 
-            
+
 
             //for (int i = 0; i < 10000; i++)
             {
                 Instances.Render(_gl, _material!, in _viewProjection, CollectionsMarshal.AsSpan(_instanceData));
             }
-            
+
             //ColoredTriangle.Render(_gl, ref _color, in _transform, in _viewProjection);
 
             Matrix4x4 identity = Matrix4x4.Identity;
