@@ -126,7 +126,7 @@ namespace SceneGL.GLWrappers
                 uint shader = gl.CreateShader(source.Type);
                 string shaderLabel = source.Name ?? $"Shader {shader}";
 
-                gl.SetShaderLabel(shader, shaderLabel);
+                ObjectLabelHelper.SetShaderLabel(gl, shader, shaderLabel);
                 gl.ShaderSource(shader, source.Code);
 
                 programLabel += shaderLabel;
@@ -139,7 +139,7 @@ namespace SceneGL.GLWrappers
 
             program = gl.CreateProgram();
 
-            gl.SetShaderProgramLabel(program, programLabel);
+            ObjectLabelHelper.SetShaderProgramLabel(gl, program, programLabel);
 
 
 
