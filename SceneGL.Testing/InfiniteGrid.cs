@@ -28,8 +28,9 @@ namespace SceneGL.Testing
 
         public static readonly ShaderSource VertexSource = new(
             "InfiniteGrid.vert",
-            ShaderType.VertexShader,
-            @"#version 330
+            ShaderType.VertexShader,"""
+                #version 330
+
                 uniform mat4x3 uTransform;
                 uniform mat4x4 uViewProjection;
                 layout (location = 0) in vec3 aPosition;
@@ -45,13 +46,13 @@ namespace SceneGL.Testing
 
                     gl_Position = uViewProjection*vec4(pos, 1.0);
                 }
-                "
+                """
             );
 
         public static readonly ShaderSource FragmentSource = new(
             "InfiniteGrid.frag",
-            ShaderType.FragmentShader,
-            @"#version 330
+            ShaderType.FragmentShader, """
+                #version 330
 
                 uniform vec4 uColor;
                 uniform sampler2D uTex;
@@ -122,7 +123,7 @@ namespace SceneGL.Testing
                     if(oColor.a==0.0)
                        discard;
                 }
-                "
+                """
             );
 
         public static void Initialize(GL gl)

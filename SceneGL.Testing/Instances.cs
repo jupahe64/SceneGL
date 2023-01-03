@@ -57,8 +57,9 @@ namespace SceneGL.Testing
         private static uint s_sampler;
         public static readonly ShaderSource VertexSource = new(
             "Instances.vert",
-            ShaderType.VertexShader,
-            @"#version 330
+            ShaderType.VertexShader,"""
+                #version 330
+
                 layout (std140) uniform ubScene
                 {
                     mat4x4 uViewProjection;
@@ -93,13 +94,14 @@ namespace SceneGL.Testing
 
                     gl_Position = uViewProjection*vec4(finalPos, 1.0);
                 }
-                "
+                """
             );
 
         public static readonly ShaderSource FragmentSource = new(
             "Instances.frag",
-            ShaderType.FragmentShader,
-            @"#version 330
+            ShaderType.FragmentShader,"""
+                #version 330
+
                 layout (std140) uniform ubMaterial
                 {
                     vec4 uColor;
@@ -118,7 +120,7 @@ namespace SceneGL.Testing
                     oColor = vColor+uColor+tex*tex.a*0.1;
                     oColor = mix(oColor, vec4(1.0), vColorFade);
                 }
-                "
+                """
             );
 
         public static void Initialize(GL gl)
