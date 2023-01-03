@@ -86,8 +86,13 @@ namespace SceneGL.Testing
                     _imguiController = new ImGuiController(_gl, _window, _input);
                 }
 
-                var (hWnd, _, _) = _window.Native!.Win32!.Value;
+                var win32 = _window.Native!.Win32;
+
+                if(win32 is not null)
+                {
+                    var (hWnd, _, _) = win32.Value;
                 WindowsDarkmodeUtil.SetDarkmodeAware(hWnd);
+                }
 
                 
                 //prevent windows from freezing when resizing/moving
