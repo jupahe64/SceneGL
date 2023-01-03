@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SceneGL
+namespace SceneGL.GLHelpers
 {
     public static class TextureHelper
     {
@@ -23,7 +23,7 @@ namespace SceneGL
 
             gl.TexImage2D(TextureTarget.Texture2D, 0, internalformat, width, height, 0, format, PixelType.UnsignedByte, pixels);
 
-            if(generateMipmaps)
+            if (generateMipmaps)
                 gl.GenerateMipmap(TextureTarget.Texture2D);
 
             gl.BindTexture(TextureTarget.Texture2D, 0);
