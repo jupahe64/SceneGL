@@ -1,4 +1,5 @@
 ﻿using SceneGL.GLWrappers;
+using SceneGL.GLHelpers;
 using Silk.NET.OpenGL;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -131,8 +132,14 @@ namespace SceneGL.Testing
             s_shaderProgram = new ShaderProgram(VertexSource, FragmentSource);
 
             s_instanceBuffer = gl.GenBuffer();
+            gl.SetBufferLabel(s_instanceBuffer, "Instances.InstanceBuffer");
+
             s_sceneDataBuffer = gl.GenBuffer();
+            gl.SetBufferLabel(s_sceneDataBuffer, "Instances.SceneDataBuffer");
+
             s_materialDataBuffer = gl.GenBuffer();
+            gl.SetBufferLabel(s_materialDataBuffer, "Instances.MaterialDataBuffer");
+
             s_materialShader = new MaterialShader(s_shaderProgram, 
                 sceneBlockBinding: "ubScene",
                 materialBlockBinding: "ubMaterial",

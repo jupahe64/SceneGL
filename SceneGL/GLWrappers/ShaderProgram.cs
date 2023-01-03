@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using SceneGL.Util;
 using System.Runtime.InteropServices;
+using SceneGL.GLHelpers;
 
 namespace SceneGL.GLWrappers
 {
@@ -125,7 +126,7 @@ namespace SceneGL.GLWrappers
                 uint shader = gl.CreateShader(source.Type);
                 string shaderLabel = source.Name ?? $"Shader {shader}";
 
-                gl.ObjectLabel(ObjectIdentifier.Shader, shader, (uint)shaderLabel.Length, shaderLabel);
+                gl.SetShaderLabel(shader, shaderLabel);
                 gl.ShaderSource(shader, source.Code);
 
                 programLabel += shaderLabel;
@@ -138,12 +139,15 @@ namespace SceneGL.GLWrappers
 
             program = gl.CreateProgram();
 
-            gl.ObjectLabel(ObjectIdentifier.Program, program, (uint)programLabel.Length, programLabel);
+            gl.SetShaderProgramLabel(program, programLabel);
 
 
 
             foreach (uint shader in shaders)
+            {
+                gl.CompileShader(shader);
                 gl.AttachShader(program, shader);
+            }
 
             gl.LinkProgram(program);
 
