@@ -368,13 +368,9 @@ namespace SceneGL.Testing
 
                     uint maxInstanceCount = s_materialShader.MaxInstanceCount!.Value;
 
-                    for (int i = 0; i < (instanceData.Length+maxInstanceCount-1) / maxInstanceCount; i++)
-                    {
-                        gl.BindBufferRange(BufferTargetARB.UniformBuffer, instanceBlockIndex.Value, s_instanceBuffer,
-                            (nint)(i * (sizeof(InstanceData) * maxInstanceCount)), (nuint)(sizeof(InstanceData) * maxInstanceCount));
-
-                        s_model!.Draw(gl, maxInstanceCount);
-                    }
+                    s_model!.DrawWithInstanceData(gl, instanceBlockIndex.Value, 
+                        ((uint)sizeof(InstanceData), maxInstanceCount), 
+                        new BufferRange(s_instanceBuffer, (uint)(instanceData.Length * sizeof(InstanceData))));
                 }
                 else
                 {

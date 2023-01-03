@@ -63,7 +63,7 @@ namespace SceneGL
             _fields = fields;
         }
 
-        private static Dictionary<Type, VertexStructDescription> _cache = new Dictionary<Type, VertexStructDescription>();
+        private static readonly Dictionary<Type, VertexStructDescription> _cache = new();
 
         public static VertexStructDescription From<TVertex>() where TVertex : unmanaged
         {

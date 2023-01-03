@@ -9,7 +9,12 @@ using System.Xml.Linq;
 
 namespace SceneGL
 {
-    public record struct BufferRange(uint Buffer, int Offset, uint Size);
+    public record struct BufferRange(uint Buffer, int Offset, uint Size)
+    {
+        public BufferRange(uint Buffer, uint Size) : 
+            this(Buffer, 0, Size) { }
+    }
+
     public record struct BufferBinding(string Name, BufferRange Data);
     public record struct SamplerBinding(string Binding, uint Sampler, uint Texture);
 
