@@ -48,7 +48,6 @@ namespace SceneGL.Testing
 
         private static uint s_instanceBuffer;
         private static uint s_sceneDataBuffer;
-        private static uint s_materialDataBuffer;
         private static MaterialShader? s_materialShader;
         private static RenderableModel? s_model;
 
@@ -138,9 +137,6 @@ namespace SceneGL.Testing
 
             s_sceneDataBuffer = gl.GenBuffer();
             ObjectLabelHelper.SetBufferLabel(gl, s_sceneDataBuffer, "Instances.SceneDataBuffer");
-
-            s_materialDataBuffer = gl.GenBuffer();
-            ObjectLabelHelper.SetBufferLabel(gl, s_materialDataBuffer, "Instances.MaterialDataBuffer");
 
             s_materialShader = new MaterialShader(s_shaderProgram, 
                 sceneBlockBinding: "ubScene",
@@ -339,19 +335,15 @@ namespace SceneGL.Testing
                 throw new InvalidOperationException($@"{nameof(Instances)} must be initialized before any calls to {nameof(Render)}");
 
 
-            gl.BindBuffer(BufferTargetARB.UniformBuffer, s_instanceBuffer);
-            gl.BufferData(BufferTargetARB.UniformBuffer, instanceData, BufferUsageARB.DynamicDraw);
-            gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
+            var instanceBuffer = BufferHelper.SetBufferData(gl, BufferTargetARB.UniformBuffer, s_instanceBuffer, 
+                BufferUsageARB.DynamicDraw, instanceData);
 
-            unsafe
-            {
-                gl.BindBuffer(BufferTargetARB.UniformBuffer, s_sceneDataBuffer);
-                gl.BufferData(BufferTargetARB.UniformBuffer, (nuint)sizeof(Matrix4x4), viewProjection, BufferUsageARB.DynamicDraw);
-                gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
-            }
+            var sceneDataBuffer = BufferHelper.SetBufferData(gl, BufferTargetARB.UniformBuffer, s_sceneDataBuffer,
+                BufferUsageARB.DynamicDraw, viewProjection);
+
             
             if (s_materialShader!.TryUse(gl,
-                sceneData: new BufferRange(s_sceneDataBuffer, 0, (uint)sizeof(Matrix4x4)),
+                sceneData: sceneDataBuffer,
                 materialData: material.GetDataBuffer(gl),
                 materialSamplers:  material.Samplers,
                 otherUBOData: null,
