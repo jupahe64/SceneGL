@@ -11,9 +11,6 @@ namespace SceneGL.GLHelpers
 {
     public static class TextureHelper
     {
-        public delegate ReadOnlySpan<TPixel> TextureDataProvider<TPixel>(out uint width, out uint height);
-        public delegate ReadOnlySpan<byte> CompressedTextureDataProvider(out uint width, out uint height);
-
         public static uint CreateTexture2D<TPixel>(GL gl, InternalFormat internalformat,
             uint width, uint height, PixelFormat format, ReadOnlySpan<TPixel> pixels, bool generateMipmaps)
             where TPixel : unmanaged
@@ -30,18 +27,18 @@ namespace SceneGL.GLHelpers
             return texture;
         }
 
-        public static uint CreateTexture2D<TPixel>(GL gl, InternalFormat internalformat,
-            PixelFormat format, params TextureDataProvider<TPixel>[] levels)
+        public static uint CreateTexture2D<TPixel, TImageSource>(GL gl, InternalFormat internalformat,
+            PixelFormat format, IReadOnlyList<(TPixel[] pixels, uint width, uint height)> mipLevels)
             where TPixel : unmanaged
         {
             uint texture = gl.GenTexture();
             gl.BindTexture(TextureTarget.Texture2D, texture);
 
-            for (int i = 0; i < levels.Length; i++)
+            for (int i = 0; i < mipLevels.Count; i++)
             {
-                var pixels = levels[i].Invoke(out uint width, out uint height);
+                var (pixels, width, height) = mipLevels[i];
 
-                gl.TexImage2D(TextureTarget.Texture2D, i, internalformat, width, height, 0, format, PixelType.UnsignedByte, pixels);
+                gl.TexImage2D<TPixel>(TextureTarget.Texture2D, i, internalformat, width, height, 0, format, PixelType.UnsignedByte, pixels);
             }
 
             gl.BindTexture(TextureTarget.Texture2D, 0);
@@ -49,12 +46,12 @@ namespace SceneGL.GLHelpers
         }
 
         public static uint CreateTexture2DCompressed(GL gl, InternalFormat internalformat,
-            uint width, uint height, ReadOnlySpan<byte> pixels, bool generateMipmaps)
+            uint width, uint height, ReadOnlySpan<byte> data, bool generateMipmaps)
         {
             uint texture = gl.GenTexture();
             gl.BindTexture(TextureTarget.Texture2D, texture);
 
-            gl.CompressedTexImage2D(TextureTarget.Texture2D, 0, internalformat, width, height, 0, pixels);
+            gl.CompressedTexImage2D(TextureTarget.Texture2D, 0, internalformat, width, height, 0, data);
 
             if (generateMipmaps)
                 gl.GenerateMipmap(TextureTarget.Texture2D);
@@ -64,16 +61,16 @@ namespace SceneGL.GLHelpers
         }
 
         public static uint CreateTexture2DCompressed(GL gl, InternalFormat internalformat,
-            params CompressedTextureDataProvider[] levels)
+            IReadOnlyList<(byte[] data, uint width, uint height)> mipLevels)
         {
             uint texture = gl.GenTexture();
             gl.BindTexture(TextureTarget.Texture2D, texture);
 
-            for (int i = 0; i < levels.Length; i++)
+            for (int i = 0; i < mipLevels.Count; i++)
             {
-                var pixels = levels[i].Invoke(out uint width, out uint height);
+                var (data, width, height) = mipLevels[i];
 
-                gl.CompressedTexImage2D(TextureTarget.Texture2D, i, internalformat, width, height, 0, pixels);
+                gl.CompressedTexImage2D<byte>(TextureTarget.Texture2D, i, internalformat, width, height, 0, data);
             }
 
             gl.BindTexture(TextureTarget.Texture2D, 0);
