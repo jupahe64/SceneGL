@@ -112,14 +112,8 @@ namespace SceneGL.Testing
                     PixelFormat.Rgba, pixelData, true);
             }
 
-            //sampler
-            {
-                s_sampler = gl.CreateSampler();
-                gl.SamplerParameterI(s_sampler, SamplerParameterI.MagFilter, (int)TextureMagFilter.Linear);
-                gl.SamplerParameterI(s_sampler, SamplerParameterI.MinFilter, (int)TextureMagFilter.Linear);
-            }
+            s_sampler = SamplerHelper.CreateMipMapSampler2D(gl, lodBias: -3);
             
-
             s_model = RenderableModel.Create<Vertex>(gl, s_data);
         }
 
