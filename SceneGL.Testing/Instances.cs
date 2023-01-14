@@ -10,6 +10,7 @@ using System.Linq;
 using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
+using Silk.NET.Maths;
 
 namespace SceneGL.Testing
 {
@@ -34,11 +35,51 @@ namespace SceneGL.Testing
                 new Vertex{Position = new Vector3(+1,-1,0), UV = new Vector2(1.0f, 0.0f), Color = new Vector4(1.0f, 0.0f, 1.0f, 1.0f)},
             };
 
+        private static InstanceData[] s_instanceTransformResultBuffer = new InstanceData[1];
+
         public struct InstanceData
         {
-            public Matrix4x4 Transform;
+            /// <summary>
+            /// The internal representation of the Transform as a 4x3 row_major matrix, 
+            /// not intended for direct access, use <see cref="Transform"/> instead
+            /// </summary>
+            public Matrix3X4<float> TransformData;
+            public Vector4 TintColor;
 
-            public InstanceData(Matrix4x4 transform)
+
+            
+            public Matrix4x4 Transform
+            {
+                // row_major 4x3 -> column_major 4x4
+                get => new (
+                    TransformData.M11, TransformData.M21, TransformData.M31, 0,
+                    TransformData.M12, TransformData.M22, TransformData.M32, 0,
+                    TransformData.M13, TransformData.M23, TransformData.M33, 0,
+                    TransformData.M14, TransformData.M24, TransformData.M34, 1
+                    );
+
+                // column_major 4x4 -> row_major 4x3
+                set
+                {
+                    TransformData.M11 = value.M11;
+                    TransformData.M21 = value.M12;
+                    TransformData.M31 = value.M13;
+
+                    TransformData.M12 = value.M21;
+                    TransformData.M22 = value.M22;
+                    TransformData.M32 = value.M23;
+
+                    TransformData.M13 = value.M31;
+                    TransformData.M23 = value.M32;
+                    TransformData.M33 = value.M33;
+
+                    TransformData.M14 = value.M41;
+                    TransformData.M24 = value.M42;
+                    TransformData.M34 = value.M43;
+                }
+            }
+
+            public unsafe InstanceData(Matrix4x4 transform)
             {
                 Transform = transform;
             }
@@ -56,7 +97,7 @@ namespace SceneGL.Testing
         private static uint s_sampler;
         public static readonly ShaderSource VertexSource = new(
             "Instances.vert",
-            ShaderType.VertexShader,"""
+            ShaderType.VertexShader, """
                 #version 330
 
                 layout (std140) uniform ubScene
@@ -64,9 +105,14 @@ namespace SceneGL.Testing
                     mat4x4 uViewProjection;
                 };
 
-                layout (std140) uniform ubInstanceData
+                struct InstanceData {
+                    mat4x3 transform;
+                    vec4 tintColor;
+                };
+
+                layout (std140, row_major) uniform ubInstanceData
                 {
-                    mat4x3 uInstanceData[1000];
+                    InstanceData uInstanceData[1000];
                 };
 
                 layout (location = 0) in vec3 aPosition;
@@ -75,30 +121,26 @@ namespace SceneGL.Testing
 
                 out vec2 vTexCoord;
                 out vec4 vColor;
-                out float vColorFade;
+                out vec4 vInstanceTintColor;
 
                 void main() {
                     vTexCoord = aTexCoord;
                     vColor = aColor;
 
-                    vec3 centerPos = uInstanceData[gl_InstanceID]*vec4(0.0, 0.0, 0.0, 1.0);
-                    vec4 centerPosProj = uViewProjection*vec4(centerPos, 1.0);
+                    mat4x3 mtx = uInstanceData[gl_InstanceID].transform;
 
-                    vec3 pos = uInstanceData[gl_InstanceID]*vec4(aPosition, 1.0);
+                    vec3 pos = mtx*vec4(aPosition, 1.0);
 
-                    float scaleFade = clamp(abs(centerPosProj.w*0.3-12)-9,0.0,1.0);
-                    vColorFade = clamp(abs(centerPosProj.w*0.3-12)-8.5,0.0,1.0);
+                    vInstanceTintColor = uInstanceData[gl_InstanceID].tintColor;
 
-                    vec3 finalPos = mix(pos, centerPos, scaleFade);
-
-                    gl_Position = uViewProjection*vec4(finalPos, 1.0);
+                    gl_Position = uViewProjection*vec4(pos, 1.0);
                 }
                 """
             );
 
         public static readonly ShaderSource FragmentSource = new(
             "Instances.frag",
-            ShaderType.FragmentShader,"""
+            ShaderType.FragmentShader, """
                 #version 330
 
                 layout (std140) uniform ubMaterial
@@ -110,14 +152,14 @@ namespace SceneGL.Testing
 
                 in vec2 vTexCoord;
                 in vec4 vColor;
-                in float vColorFade;
+                in vec4 vInstanceTintColor;
 
                 out vec4 oColor;
 
                 void main() {
                     vec4 tex = texture(uTex, vTexCoord);
                     oColor = vColor+uColor+tex*tex.a*0.1;
-                    oColor = mix(oColor, vec4(1.0), vColorFade);
+                    oColor = mix(oColor, vec4(vInstanceTintColor.xyz, 1.0), vInstanceTintColor.a);
                 }
                 """
             );
@@ -334,9 +376,37 @@ namespace SceneGL.Testing
             if (!s_initialized)
                 throw new InvalidOperationException($@"{nameof(Instances)} must be initialized before any calls to {nameof(Render)}");
 
+            if (s_instanceTransformResultBuffer.Length < instanceData.Length)
+            {
+                int len = 1;
+                while (len < instanceData.Length) len *= 2;
 
-            var instanceBuffer = BufferHelper.SetBufferData(gl, s_instanceBuffer, 
-                BufferUsageARB.DynamicDraw, instanceData);
+                s_instanceTransformResultBuffer = new InstanceData[len];
+            }
+
+            for (int i = 0; i < instanceData.Length; i++)
+            {
+                var data = instanceData[i];
+
+                var transform = data.Transform;
+
+                var projectedCenterPos = Vector4.Transform(transform.Translation, viewProjection);
+
+                var destRotation = Quaternion.CreateFromYawPitchRoll(i, i * 2, i * 3);
+
+                float scaleFade = Math.Clamp(MathF.Abs(projectedCenterPos.W * 0.3f - 12) - 9, 0, 1);
+                float colorFade = Math.Clamp(MathF.Abs(projectedCenterPos.W * 0.3f - 12) - 8.5f, 0, 1);
+
+                var rotation = Quaternion.Slerp(Quaternion.Identity, destRotation, MathF.Pow(scaleFade, 10));
+
+                data.Transform = Matrix4x4.CreateScale(1- scaleFade * scaleFade) * Matrix4x4.CreateFromQuaternion(rotation) * transform;
+                data.TintColor = new Vector4(1, 1, 1, colorFade * colorFade * 0.5f);
+                s_instanceTransformResultBuffer[i] = data;
+            }
+
+
+            var instanceBuffer = BufferHelper.SetBufferData<InstanceData>(gl, s_instanceBuffer, 
+                BufferUsageARB.DynamicDraw, s_instanceTransformResultBuffer.AsSpan(0, instanceData.Length));
 
             BufferHelper.UpdateBufferData(gl, s_sceneDataBuffer, in viewProjection);
 
