@@ -110,13 +110,12 @@ namespace SceneGL
 
     public class RenderableModel
     {
-        private VertexArrayObject _vao;
-        private uint _elementCount;
+        private readonly VertexArrayObject _vao;
+        private uint ElementCount { get; set; }
         private readonly DrawElementsType _indexType;
         private readonly uint? _indexBuffer;
-        private readonly uint[] _vertexBuffers;
 
-        public static RenderableModel Create<TVertex>(GL gl, ReadOnlySpan<TVertex> vertices) 
+        public static RenderableModel Create<TVertex>(GL gl, ReadOnlySpan<TVertex> vertices)
             where TVertex : unmanaged
         {
             VertexStructDescription description = VertexStructDescription.From<TVertex>();
@@ -129,15 +128,68 @@ namespace SceneGL
             return Create((uint)vertices.Length, null, (vertexBuffer, description));
         }
 
-        public static RenderableModel Create<TIndex, TVertex>(GL gl, ReadOnlySpan<TIndex> indices, ReadOnlySpan<TVertex> vertices) 
+        public static RenderableModel Create<TIndex, TVertex>(GL gl, ReadOnlySpan<TIndex> indices, ReadOnlySpan<TVertex> vertices)
             where TVertex : unmanaged
             where TIndex : unmanaged
         {
             VertexStructDescription description = VertexStructDescription.From<TVertex>();
 
+            var drawElementsType = GetDrawElementsType<TIndex>(out int indicesPerElement);
+
+            uint indexBuffer = gl.GenBuffer();
+            gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, indexBuffer);
+            gl.BufferData(BufferTargetARB.ElementArrayBuffer, indices, BufferUsageARB.StaticDraw);
+            gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, 0);
+
+            uint vertexBuffer = gl.GenBuffer();
+            gl.BindBuffer(BufferTargetARB.ArrayBuffer, vertexBuffer);
+            gl.BufferData(BufferTargetARB.ArrayBuffer, vertices, BufferUsageARB.StaticDraw);
+            gl.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
+
+            return Create((uint)(indices.Length * indicesPerElement), (drawElementsType, indexBuffer), (vertexBuffer, description));
+        }
+
+        public static RenderableModel Create(uint elementCount, (DrawElementsType indexType, uint buffer)? indexBuffer, 
+            params (uint buffer, VertexStructDescription vertexStructDesc)[] vertexBufferInfos)
+        {
+            return new RenderableModel(
+                CreateVaoFromStructDescriptions(indexBuffer?.buffer, vertexBufferInfos),
+                elementCount,
+                indexBuffer?.indexType ?? default,
+                indexBuffer?.buffer
+            );
+        }
+
+        private RenderableModel(VertexArrayObject vao, uint elementCount, DrawElementsType indexType, uint? indexBuffer)
+        {
+            _vao = vao;
+            ElementCount = elementCount;
+            _indexType = indexType;
+            _indexBuffer = indexBuffer;
+        }
+
+        public unsafe void Draw(GL gl, uint instanceCount = 1)
+        {
+            if (instanceCount == 0)
+                return;
+
+            _vao.Bind(gl);
+            if (_indexBuffer != null)
+                gl.DrawElementsInstanced(PrimitiveType.Triangles, ElementCount, _indexType, null, instanceCount);
+            else
+                gl.DrawArraysInstanced(PrimitiveType.Triangles, 0, ElementCount, instanceCount);
+
+            gl.BindVertexArray(0);
+        }
+
+        public void CleanUp(GL gl) => _vao?.CleanUp(gl);
+
+        #region Helper functions
+        private static DrawElementsType GetDrawElementsType<TIndex>(out int indicesPerElement)
+        {
             var indexType = typeof(TIndex);
 
-            uint indicesPerElement = 1;
+            indicesPerElement = 1;
 
             DrawElementsType drawElementsType;
 
@@ -158,7 +210,7 @@ namespace SceneGL
                 drawElementsType = DrawElementsType.UnsignedByte;
                 indicesPerElement = 3;
             }
-            else if(indexType == typeof(TriangleU16))
+            else if (indexType == typeof(TriangleU16))
             {
                 drawElementsType = DrawElementsType.UnsignedShort;
                 indicesPerElement = 3;
@@ -171,31 +223,16 @@ namespace SceneGL
             else
                 throw new ArgumentException($"Index type has to be either byte, ushort or uint, was {typeof(TIndex).Name}");
 
-            uint indexBuffer = gl.GenBuffer();
-            gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, indexBuffer);
-            gl.BufferData(BufferTargetARB.ElementArrayBuffer, indices, BufferUsageARB.StaticDraw);
-            gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, 0);
-
-            uint vertexBuffer = gl.GenBuffer();
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, vertexBuffer);
-            gl.BufferData(BufferTargetARB.ArrayBuffer, vertices, BufferUsageARB.StaticDraw);
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
-
-            return Create((uint)indices.Length * indicesPerElement, (drawElementsType, indexBuffer), (vertexBuffer, description));
+            return drawElementsType;
         }
 
-        public static RenderableModel Create(uint elementCount, (DrawElementsType indexType, uint buffer)? indexBuffer, params (uint buffer, VertexStructDescription vertexStructDesc)[] vertexBufferInfos)
+        private static VertexArrayObject CreateVaoFromStructDescriptions(uint? indexBuffer, (uint buffer, VertexStructDescription vertexStructDesc)[] vertexBufferInfos)
         {
-            var vertexBuffers = new uint[vertexBufferInfos.Length];
-
             var attributeInfos = new List<VertexAttributeInfo>();
-
             ushort shaderLocAssignments = 0;
 
             for (int i = 0; i < vertexBufferInfos.Length; i++)
             {
-                vertexBuffers[i] = vertexBufferInfos[i].buffer;
-
                 var (vtxBuffer, vtxStructDesc) = vertexBufferInfos[i];
 
                 int firstIdxOfAddition = attributeInfos.Count;
@@ -223,38 +260,8 @@ namespace SceneGL
                     attributeInfos[j] = attributeInfos[j] with { Stride = stride };
             }
 
-            return new RenderableModel(
-                new VertexArrayObject(indexBuffer?.buffer, attributeInfos.ToArray()),
-                elementCount,
-                indexBuffer?.indexType ?? default,
-                indexBuffer?.buffer,
-                vertexBuffers
-            );
+            return new VertexArrayObject(indexBuffer, attributeInfos.ToArray());
         }
-
-        private RenderableModel(VertexArrayObject vao, uint elementCount, DrawElementsType indexType, uint? indexBuffer, uint[] vertexBuffers)
-        {
-            _vao = vao;
-            _elementCount = elementCount;
-            _indexType = indexType;
-            _indexBuffer = indexBuffer;
-            _vertexBuffers = vertexBuffers;
-        }
-
-        public unsafe void Draw(GL gl, uint instanceCount = 1)
-        {
-            if (instanceCount == 0)
-                return;
-
-            _vao.Bind(gl);
-            if (_indexBuffer != null)
-                gl.DrawElementsInstanced(PrimitiveType.Triangles, _elementCount, _indexType, null, instanceCount);
-            else
-                gl.DrawArraysInstanced(PrimitiveType.Triangles, 0, _elementCount, instanceCount);
-
-            gl.BindVertexArray(0);
-        }
-
-        public void CleanUp(GL gl) => _vao?.CleanUp(gl);
+        #endregion
     }
 }
