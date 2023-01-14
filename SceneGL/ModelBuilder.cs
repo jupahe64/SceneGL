@@ -61,5 +61,11 @@ namespace SceneGL
                 CollectionsMarshal.AsSpan(_vertices)
                 );
         }
+
+        public void GetData(out ReadOnlySpan<uint> indices, out ReadOnlySpan<TVertex> vertices)
+        {
+            indices = CollectionsMarshal.AsSpan(_indices);
+            vertices = CollectionsMarshal.AsSpan(_vertices);
+        }
     }
 }
