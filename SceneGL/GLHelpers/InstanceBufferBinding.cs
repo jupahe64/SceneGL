@@ -22,7 +22,7 @@ namespace SceneGL.GLHelpers
                 return new InstanceBufferBinding(
                     new (int count, BufferRange range)[]
                     {
-                        (maxCountPerBlock, range)
+                        (data.Length, range)
                     });
             }
 
