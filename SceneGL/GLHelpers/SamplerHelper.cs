@@ -1,9 +1,50 @@
-﻿using Silk.NET.OpenGL;
+﻿using SceneGL.Util;
+using Silk.NET.OpenGL;
 
 namespace SceneGL.GLHelpers
 {
     public static class SamplerHelper
     {
+        public enum DefaultSamplerKey
+        {
+            LINEAR,
+            NEAREST,
+            MIPMAP
+        }
+
+        private static readonly Dictionary<DefaultSamplerKey, uint> _defaultSamplers = new();
+
+        public static uint GetOrCreate(GL gl, DefaultSamplerKey key) =>
+            _defaultSamplers.GetOrCreate(key, () =>
+            {
+                switch (key)
+                {
+                    case DefaultSamplerKey.LINEAR:
+                        uint sampler = CreateSampler2D(gl, 
+                            TextureWrapMode.Repeat, TextureWrapMode.Repeat,
+                            TextureMagFilter.Linear, TextureMinFilter.Linear);
+
+                        ObjectLabelHelper.SetSamplerLabel(gl, sampler, "Default Black");
+                        return sampler;
+                    case DefaultSamplerKey.NEAREST:
+                        sampler = CreateSampler2D(gl,
+                            TextureWrapMode.Repeat, TextureWrapMode.Repeat,
+                            TextureMagFilter.Nearest, TextureMinFilter.Nearest);
+
+                        ObjectLabelHelper.SetSamplerLabel(gl, sampler, "Default White");
+                        return sampler;
+                    case DefaultSamplerKey.MIPMAP:
+                        sampler = CreateMipMapSampler2D(gl,
+                            TextureWrapMode.Repeat, TextureWrapMode.Repeat,
+                            TextureMagFilter.Linear, TextureMinFilter.LinearMipmapLinear,
+                            0, float.MaxValue, 0);
+
+                        ObjectLabelHelper.SetSamplerLabel(gl, sampler, "Default Normal");
+                        return sampler;
+                    default:
+                        throw new ArgumentException($"{key} is not a valid {nameof(DefaultSamplerKey)}");
+                }
+            });
 
         public static uint CreateMipMapSampler2D(GL gl,
             TextureWrapMode wrapModeS = TextureWrapMode.Repeat,

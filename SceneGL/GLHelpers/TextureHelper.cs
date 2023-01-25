@@ -1,9 +1,13 @@
-﻿using Silk.NET.Core.Attributes;
+﻿using SceneGL.Util;
+using Silk.NET.Core.Attributes;
 using Silk.NET.Core.Native;
 using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -11,6 +15,60 @@ namespace SceneGL.GLHelpers
 {
     public static class TextureHelper
     {
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Rgba32
+        {
+            public byte R;
+            public byte G;
+            public byte B;
+            public byte A;
+
+            public Rgba32(byte r, byte g, byte b, byte a)
+            {
+                R = r;
+                G = g;
+                B = b;
+                A = a;
+            }
+        }
+
+        public enum DefaultTextureKey
+        {
+            BLACK,
+            WHITE,
+            NORMAL
+        }
+
+        private static readonly Dictionary<DefaultTextureKey, uint> _defaultTextures = new();
+
+        public static uint GetOrCreate(GL gl, DefaultTextureKey key) =>
+            _defaultTextures.GetOrCreate(key, () =>
+            {
+                switch (key)
+                {
+                    case DefaultTextureKey.BLACK:
+                        uint texture = Create1PixelTexure2D(gl, 0, 0, 0);
+                        ObjectLabelHelper.SetTextureLabel(gl, texture, "Default Black");
+                        return texture;
+                    case DefaultTextureKey.WHITE:
+                        texture = Create1PixelTexure2D(gl, 255, 255, 255);
+                        ObjectLabelHelper.SetTextureLabel(gl, texture, "Default White");
+                        return texture;
+                    case DefaultTextureKey.NORMAL:
+                        texture = Create1PixelTexure2D(gl, 127, 127, 255);
+                        ObjectLabelHelper.SetTextureLabel(gl, texture, "Default Normal");
+                        return texture;
+                    default:
+                        throw new ArgumentException($"{key} is not a valid {nameof(DefaultTextureKey)}");
+                }
+            });
+
+        public static uint Create1PixelTexure2D(GL gl, byte r, byte g, byte b) =>
+            CreateTexture2D<Rgba32>(gl, InternalFormat.Rgba8, 1, 1, PixelFormat.Rgba, stackalloc Rgba32[]
+                {
+                    new Rgba32(r, g, b, 255)
+                }, false);
+
         public static uint CreateTexture2D<TPixel>(GL gl, InternalFormat internalformat,
             uint width, uint height, PixelFormat format, ReadOnlySpan<TPixel> pixels, bool generateMipmaps)
             where TPixel : unmanaged
