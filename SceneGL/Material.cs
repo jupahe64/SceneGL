@@ -14,17 +14,20 @@ namespace SceneGL
 {
     public class Material
     {
-        public IReadOnlyList<SamplerBinding> Samplers;
-        uint _dataBuffer = 0;
+        public IReadOnlyList<SamplerBinding> Samplers { get; }
+        public MaterialShader Shader { get; }
 
-        byte[] _data;
-        int _dataBufferSize = -1;
-        bool _isDataDirty;
+        private uint _dataBuffer = 0;
 
-        public Material(ReadOnlySpan<byte> data, SamplerBinding[] samplers)
+        private byte[] _data;
+        private int _dataBufferSize = -1;
+        private bool _isDataDirty;
+
+        internal Material(MaterialShader shader, ReadOnlySpan<byte> data, SamplerBinding[] samplers)
         {
             _data = data.ToArray();
             Samplers = samplers;
+            Shader = shader;
             _isDataDirty = true;
         }
 
@@ -32,6 +35,8 @@ namespace SceneGL
         {
             _data = data.ToArray();
         }
+
+        public ReadOnlySpan<byte> GetData() => _data;
 
         public BufferRange GetDataBuffer(GL gl)
         {
@@ -58,15 +63,18 @@ namespace SceneGL
     public class Material<TData> : Material
         where TData : unmanaged
     {
-        public Material(TData data, SamplerBinding[] samplers) 
-            : base(data.ToByteArray(), samplers)
+        internal Material(MaterialShader shader, TData data, SamplerBinding[] samplers) 
+            : base(shader, data.ToByteArray(), samplers)
         {
 
         }
 
-        public void SetData(TData data)
+        public void SetData(in TData data)
         {
             SetData(data.ToByteArray());
         }
+
+        public new TData GetData() => base.GetData().ToStruct<TData>();
+        public ReadOnlySpan<byte> GetRawData() => base.GetData();
     }
 }

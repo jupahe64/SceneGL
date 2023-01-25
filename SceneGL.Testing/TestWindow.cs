@@ -16,6 +16,7 @@ using SceneGL.Testing.Util;
 using SceneGL.GLWrappers;
 using Framebuffer = SceneGL.GLWrappers.Framebuffer;
 using SixLabors.ImageSharp.ColorSpaces;
+using SceneGL.GLHelpers;
 
 namespace SceneGL.Testing
 {
@@ -50,7 +51,7 @@ namespace SceneGL.Testing
         private bool _isSceneHoveredBeforeDrag;
 
         private List<Instances.InstanceData> _instanceData;
-        private Material<Vector4>? _material;
+        private Material<Instances.UbMaterial>? _material;
 
         public TestWindow()
         {
@@ -400,6 +401,9 @@ namespace SceneGL.Testing
             _gl.GetInteger(GetPName.MaxFragmentUniformBlocks, out res);
             ImGui.Text($"MaxFragmentUniformBlocks: {res}");
 
+            _gl.GetInteger(GetPName.UniformBufferOffsetAlignment, out res);
+            ImGui.Text($"UniformBufferOffsetAlignment: {res}");
+
             ImGui.PushStyleColor(ImGuiCol.Header, 0x0);
             ImGui.PushStyleColor(ImGuiCol.HeaderHovered, 0x33_33_33_33);
             ImGui.PushStyleColor(ImGuiCol.HeaderActive, 0x0);
@@ -421,7 +425,11 @@ namespace SceneGL.Testing
                 ImGui.SetNextItemWidth(150);
                 if(ImGui.ColorPicker4("Color", ref _color))
                 {
-                    _material!.SetData(_color);
+                    var mat = _material!.GetData();
+
+                    mat.Color = _color;
+
+                    _material!.SetData(mat);
                 }
             }
 

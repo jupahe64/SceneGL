@@ -36,6 +36,13 @@ namespace SceneGL
             _instanceDataBlock = instanceDataBlock;
         }
 
+        public Material CreateMaterial(ReadOnlySpan<byte> data, SamplerBinding[] samplers)
+            => new(this, data, samplers);
+
+        public Material<TData> CreateMaterial<TData>(in TData data, SamplerBinding[] samplers)
+            where TData : unmanaged
+            => new(this, data, samplers);
+
         public bool TryUse(GL gl, BufferRange sceneData, BufferRange materialData, IReadOnlyList<SamplerBinding> materialSamplers,
             IReadOnlyList<BufferBinding>? otherUBOData,
             IReadOnlyList<SamplerBinding>? otherSamplers, out uint? instanceBlockIndex)

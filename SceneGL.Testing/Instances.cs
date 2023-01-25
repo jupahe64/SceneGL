@@ -11,6 +11,7 @@ using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 using Silk.NET.Maths;
+using SharpDX.Direct3D11;
 
 namespace SceneGL.Testing
 {
@@ -27,13 +28,6 @@ namespace SceneGL.Testing
             [VertexAttribute(AttributeShaderLoc.Loc2, 4, VertexAttribPointerType.Float, normalized: false)]
             public Vector4 Color;
         }
-
-        private static readonly Vertex[] s_data = new[]
-            {
-                new Vertex{Position = new Vector3(+0,+1,0), UV = new Vector2(0.5f, 1.0f), Color = new Vector4(1.0f, 1.0f, 0.0f, 1.0f)},
-                new Vertex{Position = new Vector3(-1,-1,0), UV = new Vector2(0.0f, 0.0f), Color = new Vector4(0.0f, 1.0f, 1.0f, 1.0f)},
-                new Vertex{Position = new Vector3(+1,-1,0), UV = new Vector2(1.0f, 0.0f), Color = new Vector4(1.0f, 0.0f, 1.0f, 1.0f)},
-            };
 
         private static InstanceData[] s_instanceTransformResultBuffer = new InstanceData[1];
 
@@ -85,14 +79,21 @@ namespace SceneGL.Testing
             }
         }
 
-        private static bool s_initialized = false;
+        public struct UbScene
+        {
+            public Matrix4x4 ViewProjection;
+        }
+
+        public struct UbMaterial
+        {
+            public Vector4 Color;
+        }
 
         private static uint s_instanceBuffer;
         private static BufferRange s_sceneDataBuffer;
         private static MaterialShader? s_materialShader;
         private static RenderableModel? s_model;
 
-        private static ShaderProgram? s_shaderProgram;
         private static uint s_texture;
         private static uint s_sampler;
         public static readonly ShaderSource VertexSource = new(
@@ -166,13 +167,8 @@ namespace SceneGL.Testing
 
         public static void Initialize(GL gl)
         {
-            if (s_initialized)
+            if (s_materialShader!=null)
                 return;
-
-            s_initialized = true;
-
-
-            s_shaderProgram = new ShaderProgram(VertexSource, FragmentSource);
 
             s_instanceBuffer = BufferHelper.CreateBuffer(gl);
             ObjectLabelHelper.SetBufferLabel(gl, s_instanceBuffer, "Instances.InstanceBuffer");
@@ -180,7 +176,7 @@ namespace SceneGL.Testing
             s_sceneDataBuffer = BufferHelper.CreateBuffer(gl, BufferUsageARB.StreamDraw, Matrix4x4.Identity);
             ObjectLabelHelper.SetBufferLabel(gl, s_sceneDataBuffer.Buffer, "Instances.SceneDataBuffer");
 
-            s_materialShader = new MaterialShader(s_shaderProgram, 
+            s_materialShader = new MaterialShader(new ShaderProgram(VertexSource, FragmentSource), 
                 sceneBlockBinding: "ubScene",
                 materialBlockBinding: "ubMaterial",
                 instanceDataBlock: ("ubInstanceData", 1000));
@@ -360,12 +356,12 @@ namespace SceneGL.Testing
             #endregion
         }
 
-        public static Material<Vector4> CreateMaterial(Vector4 color)
+        public static Material<UbMaterial> CreateMaterial(Vector4 color)
         {
-            if (!s_initialized)
+            if (s_materialShader==null)
                 throw new InvalidOperationException($@"{nameof(Instances)} must be initialized before any calls to {nameof(CreateMaterial)}");
 
-            return new Material<Vector4>(color, new SamplerBinding[]
+            return s_materialShader.CreateMaterial(new UbMaterial { Color = color }, new SamplerBinding[]
             {
                 new SamplerBinding("uTex", s_sampler, s_texture)
             });
@@ -373,7 +369,7 @@ namespace SceneGL.Testing
 
         public unsafe static void Render(GL gl, Material material, in Matrix4x4 viewProjection, ReadOnlySpan<InstanceData> instanceData)
         {
-            if (!s_initialized)
+            if (s_materialShader==null)
                 throw new InvalidOperationException($@"{nameof(Instances)} must be initialized before any calls to {nameof(Render)}");
 
             if (s_instanceTransformResultBuffer.Length < instanceData.Length)
@@ -404,11 +400,11 @@ namespace SceneGL.Testing
                 s_instanceTransformResultBuffer[i] = data;
             }
 
-
-            var instanceBuffer = BufferHelper.SetBufferData<InstanceData>(gl, s_instanceBuffer, 
-                BufferUsageARB.DynamicDraw, s_instanceTransformResultBuffer.AsSpan(0, instanceData.Length));
-
-            BufferHelper.UpdateBufferData(gl, s_sceneDataBuffer, in viewProjection);
+            BufferHelper.UpdateBufferData(gl, s_sceneDataBuffer, 
+                new UbScene
+                {
+                    ViewProjection = viewProjection 
+                });
 
             
             if (s_materialShader!.TryUse(gl,
@@ -422,13 +418,20 @@ namespace SceneGL.Testing
             {
                 if (instanceBlockIndex.HasValue)
                 {
-                    //gl.GetInteger(GetPName.MaxUniformBlockSize, out int maxBlockSize);
+                    var instanceBufferBinding = InstanceBufferHelper.UploadData<InstanceData>(
+                        gl, s_instanceBuffer, (int)s_materialShader.MaxInstanceCount!.Value,
+                        s_instanceTransformResultBuffer, BufferUsageARB.StreamDraw);
 
-                    uint maxInstanceCount = s_materialShader.MaxInstanceCount!.Value;
+                    for (int i = 0; i < instanceBufferBinding.Blocks.Count; i++)
+                    {
+                        var (count, range) = instanceBufferBinding.Blocks[i];
 
-                    s_model!.DrawWithInstanceData(gl, instanceBlockIndex.Value, 
-                        ((uint)sizeof(InstanceData), maxInstanceCount), 
-                        new BufferRange(s_instanceBuffer, (uint)(instanceData.Length * sizeof(InstanceData))));
+                        gl.BindBufferRange(BufferTargetARB.UniformBuffer, instanceBlockIndex.Value, 
+                            range.Buffer, 
+                            range.Offset, range.Size);
+
+                        s_model!.Draw(gl, (uint)count);
+                    }
                 }
                 else
                 {
