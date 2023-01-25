@@ -173,7 +173,9 @@ namespace SceneGL.Testing
             s_instanceBuffer = BufferHelper.CreateBuffer(gl);
             ObjectLabelHelper.SetBufferLabel(gl, s_instanceBuffer, "Instances.InstanceBuffer");
 
-            s_sceneDataBuffer = BufferHelper.CreateBuffer(gl, BufferUsageARB.StreamDraw, Matrix4x4.Identity);
+            s_sceneDataBuffer = BufferHelper.CreateBuffer(gl, BufferUsageARB.StreamDraw, 
+                new UbScene { ViewProjection = Matrix4x4.Identity });
+
             ObjectLabelHelper.SetBufferLabel(gl, s_sceneDataBuffer.Buffer, "Instances.SceneDataBuffer");
 
             s_materialShader = new MaterialShader(new ShaderProgram(VertexSource, FragmentSource), 

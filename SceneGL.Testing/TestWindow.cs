@@ -51,6 +51,7 @@ namespace SceneGL.Testing
         private bool _isSceneHoveredBeforeDrag;
 
         private List<Instances.InstanceData> _instanceData;
+        private List<Gizmos.InstanceData> _gizmoPositions;
         private Material<Instances.UbMaterial>? _material;
 
         public TestWindow()
@@ -179,16 +180,24 @@ namespace SceneGL.Testing
             Box(38, 8, 44, 14, 12);
 
 
-            //_instanceData = new Instances.InstanceData[]
-            //{
-            //    new(Matrix4x4.Identity),
-            //    new(Matrix4x4.CreateScale(0.5f) * Matrix4x4.CreateTranslation(2, 0, 0)),
-            //    new(Matrix4x4.CreateScale(0.5f) * Matrix4x4.CreateTranslation(-2, 0, 0)),
-
-            //    new(Matrix4x4.CreateTranslation(5, 0, 0)),
-            //    new(Matrix4x4.CreateScale(0.5f) * Matrix4x4.CreateTranslation(3, 0, 0)),
-            //    new(Matrix4x4.CreateScale(0.5f) * Matrix4x4.CreateTranslation(7, 0, 0)),
-            //};
+            _gizmoPositions = new List<Gizmos.InstanceData>
+            {
+                new Gizmos.InstanceData
+                {
+                    Position=new Vector3(0, 5, 0), 
+                    Color=new Vector3(1, 0.5f, 0.5f) 
+                },
+                new Gizmos.InstanceData
+                {
+                    Position=new Vector3(15, 9, -16), 
+                    Color=new Vector3(1, 1, 0.8f) 
+                },
+                new Gizmos.InstanceData
+                {
+                    Position=new Vector3(41, 18, 13), 
+                    Color=new Vector3(0.5f, 1.0f, 1.0f) 
+                },
+            };
         }
 
         public void AddToWindowManager() => _window.AddToWindowManager();
@@ -231,6 +240,7 @@ namespace SceneGL.Testing
             ColoredTriangle.Initialize(_gl);
             Instances.Initialize(_gl);
             InfiniteGrid.Initialize(_gl);
+            Gizmos.Initialize(_gl);
 
             _material = Instances.CreateMaterial(_color);
 
@@ -564,6 +574,7 @@ namespace SceneGL.Testing
             //for (int i = 0; i < 10000; i++)
             {
                 Instances.Render(_gl, _material!, in _viewProjection, CollectionsMarshal.AsSpan(_instanceData));
+                Gizmos.Render(_gl, _camera.Rotation, in _viewProjection, CollectionsMarshal.AsSpan(_gizmoPositions));
             }
 
             //ColoredTriangle.Render(_gl, ref _color, in _transform, in _viewProjection);

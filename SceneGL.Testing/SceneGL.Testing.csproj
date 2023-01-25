@@ -22,6 +22,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="res\LightGizmo.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="res\OpenGL_White_500px_June16.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
