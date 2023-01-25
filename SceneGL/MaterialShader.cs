@@ -18,6 +18,36 @@ namespace SceneGL
     public record struct BufferBinding(string Name, BufferRange Data);
     public record struct SamplerBinding(string Binding, uint Sampler, uint Texture);
 
+    public struct MaterialShaderScope : IDisposable
+    {
+        private readonly GL gl;
+        private readonly uint uniformBlockCount;
+        private readonly uint textureUnitCount;
+
+        internal MaterialShaderScope(GL gl, uint uniformBlockCount, uint textureUnitCount)
+        {
+            this.gl = gl;
+            this.uniformBlockCount = uniformBlockCount;
+            this.textureUnitCount = textureUnitCount;
+        }
+
+        public void Dispose()
+        {
+            for (uint i = 0; i < uniformBlockCount; i++)
+            {
+                gl.BindBufferBase(BufferTargetARB.UniformBuffer, i, 0);
+            }
+
+            for (uint i = 0; i < textureUnitCount; i++)
+            {
+                gl.BindTextureUnit(i, 0);
+                gl.BindSampler(i, 0);
+            }
+
+            gl.UseProgram(0);
+        }
+    }
+
     public class MaterialShader
     {
         private readonly ShaderProgram _program;
@@ -45,12 +75,15 @@ namespace SceneGL
 
         public bool TryUse(GL gl, BufferRange sceneData, BufferRange materialData, IReadOnlyList<SamplerBinding> materialSamplers,
             IReadOnlyList<BufferBinding>? otherUBOData,
-            IReadOnlyList<SamplerBinding>? otherSamplers, out uint? instanceBlockIndex)
+            IReadOnlyList<SamplerBinding>? otherSamplers, out MaterialShaderScope scope, out uint? instanceBlockIndex)
         {
             instanceBlockIndex = null;
 
             if (!_program.TryUse(gl, out uint program))
+            {
+                scope = new MaterialShaderScope(gl, 0,0);
                 return false;
+            }
 
             uint nextFreeUnit = 0;
             uint nextFreeBlockBinding = 0;
@@ -108,6 +141,8 @@ namespace SceneGL
 
                 nextFreeUnit++;
             }
+
+            scope = new MaterialShaderScope(gl, nextFreeBlockBinding, nextFreeUnit);
 
             return true;
         }

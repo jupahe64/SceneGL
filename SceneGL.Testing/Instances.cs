@@ -415,36 +415,36 @@ namespace SceneGL.Testing
                 materialSamplers:  material.Samplers,
                 otherUBOData: null,
                 otherSamplers: null,
+                out MaterialShaderScope scope,
                 out uint? instanceBlockIndex
                 ))
             {
-                if (instanceBlockIndex.HasValue)
+                using (scope)
                 {
-                    var instanceBufferBinding = InstanceBufferHelper.UploadData<InstanceData>(
-                        gl, s_instanceBuffer, (int)s_materialShader.MaxInstanceCount!.Value,
-                        s_instanceTransformResultBuffer, BufferUsageARB.StreamDraw);
-
-                    for (int i = 0; i < instanceBufferBinding.Blocks.Count; i++)
+                    if (instanceBlockIndex.HasValue)
                     {
-                        var (count, range) = instanceBufferBinding.Blocks[i];
+                        var instanceBufferBinding = InstanceBufferHelper.UploadData<InstanceData>(
+                            gl, s_instanceBuffer, (int)s_materialShader.MaxInstanceCount!.Value,
+                            s_instanceTransformResultBuffer, BufferUsageARB.StreamDraw);
 
-                        gl.BindBufferRange(BufferTargetARB.UniformBuffer, instanceBlockIndex.Value, 
-                            range.Buffer, 
-                            range.Offset, range.Size);
+                        for (int i = 0; i < instanceBufferBinding.Blocks.Count; i++)
+                        {
+                            var (count, range) = instanceBufferBinding.Blocks[i];
 
-                        s_model!.Draw(gl, (uint)count);
+                            gl.BindBufferRange(BufferTargetARB.UniformBuffer, instanceBlockIndex.Value, 
+                                range.Buffer, 
+                                range.Offset, range.Size);
+
+                            s_model!.Draw(gl, (uint)count);
+                        }
+                        
+                        gl.BindBufferBase(BufferTargetARB.UniformBuffer, instanceBlockIndex.Value, 0);
+                    }
+                    else
+                    {
+                        s_model!.Draw(gl, (uint)instanceData.Length);
                     }
                 }
-                else
-                {
-                    s_model!.Draw(gl, (uint)instanceData.Length);
-                }
-
-                
-
-                gl.UseProgram(0);
-
-                gl.BindBufferBase(BufferTargetARB.UniformBuffer, 0, 0);
             }
             else
             {

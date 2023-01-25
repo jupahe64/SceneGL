@@ -144,39 +144,37 @@ namespace SceneGL.Testing
                 materialSamplers: s_material.Samplers,
                 otherUBOData: null,
                 otherSamplers: null,
+                out MaterialShaderScope scope,
                 out uint? instanceBlockIndex
-                ))
+            ))
             {
-                gl.Enable(EnableCap.Blend);
-
-                if (instanceBlockIndex.HasValue)
+                using (scope)
                 {
-                    var instanceBufferBinding = InstanceBufferHelper.UploadData<UnlitMaterial.InstanceData>(
-                        gl, s_instanceBuffer, (int)s_materialShader.MaxInstanceCount!.Value,
-                        s_instanceTransformResultBuffer, BufferUsageARB.StreamDraw);
+                    gl.Enable(EnableCap.Blend);
 
-                    for (int i = 0; i < instanceBufferBinding.Blocks.Count; i++)
+                    if (instanceBlockIndex.HasValue)
                     {
-                        var (count, range) = instanceBufferBinding.Blocks[i];
+                        var instanceBufferBinding = InstanceBufferHelper.UploadData<UnlitMaterial.InstanceData>(
+                            gl, s_instanceBuffer, (int)s_materialShader.MaxInstanceCount!.Value,
+                            s_instanceTransformResultBuffer, BufferUsageARB.StreamDraw);
 
-                        gl.BindBufferRange(BufferTargetARB.UniformBuffer, instanceBlockIndex.Value,
-                            range.Buffer, range.Offset, range.Size);
+                        for (int i = 0; i < instanceBufferBinding.Blocks.Count; i++)
+                        {
+                            var (count, range) = instanceBufferBinding.Blocks[i];
 
-                        s_model!.Draw(gl, (uint)count);
+                            gl.BindBufferRange(BufferTargetARB.UniformBuffer, instanceBlockIndex.Value,
+                                range.Buffer, range.Offset, range.Size);
+
+                            s_model!.Draw(gl, (uint)count);
+                        }
                     }
+                    else
+                    {
+                        s_model!.Draw(gl, (uint)instancePositions.Length);
+                    }
+
+                    gl.Disable(EnableCap.Blend);
                 }
-                else
-                {
-                    s_model!.Draw(gl, (uint)instancePositions.Length);
-                }
-
-                gl.Disable(EnableCap.Blend);
-
-
-
-                gl.UseProgram(0);
-
-                gl.BindBufferBase(BufferTargetARB.UniformBuffer, 0, 0);
             }
             else
             {
