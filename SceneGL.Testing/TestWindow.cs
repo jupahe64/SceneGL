@@ -465,7 +465,6 @@ namespace SceneGL.Testing
 
                     ComboItem(ColoredTriangle.VertexSource, ColoredTriangle.FragmentSource);
                     ComboItem(InfiniteGrid.VertexSource, InfiniteGrid.FragmentSource);
-                    ComboItem(Instances.VertexSource, Instances.FragmentSource);
 
                     ImGui.EndCombo();
                 }
