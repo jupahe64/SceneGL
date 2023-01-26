@@ -41,36 +41,11 @@ namespace SceneGL.Testing
             public Vector4 TintColor;
 
 
-            
+
             public Matrix4x4 Transform
             {
-                // row_major 4x3 -> column_major 4x4
-                get => new (
-                    TransformData.M11, TransformData.M21, TransformData.M31, 0,
-                    TransformData.M12, TransformData.M22, TransformData.M32, 0,
-                    TransformData.M13, TransformData.M23, TransformData.M33, 0,
-                    TransformData.M14, TransformData.M24, TransformData.M34, 1
-                    );
-
-                // column_major 4x4 -> row_major 4x3
-                set
-                {
-                    TransformData.M11 = value.M11;
-                    TransformData.M21 = value.M12;
-                    TransformData.M31 = value.M13;
-
-                    TransformData.M12 = value.M21;
-                    TransformData.M22 = value.M22;
-                    TransformData.M32 = value.M23;
-
-                    TransformData.M13 = value.M31;
-                    TransformData.M23 = value.M32;
-                    TransformData.M33 = value.M33;
-
-                    TransformData.M14 = value.M41;
-                    TransformData.M24 = value.M42;
-                    TransformData.M34 = value.M43;
-                }
+                get => UniformBufferHelper.Unpack3dTransformMatrix(in TransformData);
+                set => UniformBufferHelper.Pack3dTransformMatrix(value, ref TransformData);
             }
 
             public unsafe InstanceData(Matrix4x4 transform)
