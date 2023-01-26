@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Silk.NET.Maths;
 using SharpDX.Direct3D11;
+using SceneGL.Materials;
 
 namespace SceneGL.Testing
 {
@@ -19,34 +20,19 @@ namespace SceneGL.Testing
     {
         private struct Vertex
         {
-            [VertexAttribute(AttributeShaderLoc.Loc0, 3, VertexAttribPointerType.Float, normalized: false)]
+            [VertexAttribute(CombinerMaterial.POSITION_LOC, 3, VertexAttribPointerType.Float, normalized: false)]
             public Vector3 Position;
 
-            [VertexAttribute(AttributeShaderLoc.Loc1, 2, VertexAttribPointerType.Float, normalized: false)]
+            [VertexAttribute(CombinerMaterial.UV0_LOC, 2, VertexAttribPointerType.Float, normalized: false)]
             public Vector2 UV;
 
-            [VertexAttribute(AttributeShaderLoc.Loc2, 4, VertexAttribPointerType.Float, normalized: false)]
+            [VertexAttribute(CombinerMaterial.COLOR_LOC, 4, VertexAttribPointerType.Float, normalized: false)]
             public Vector4 Color;
         }
 
-        private static InstanceData[] s_instanceTransformResultBuffer = new InstanceData[1];
-
         public struct InstanceData
         {
-            /// <summary>
-            /// The internal representation of the Transform as a 4x3 row_major matrix, 
-            /// not intended for direct access, use <see cref="Transform"/> instead
-            /// </summary>
-            public Matrix3X4<float> TransformData;
-            public Vector4 TintColor;
-
-
-
-            public Matrix4x4 Transform
-            {
-                get => UniformBufferHelper.Unpack3dTransformMatrix(in TransformData);
-                set => UniformBufferHelper.Pack3dTransformMatrix(value, ref TransformData);
-            }
+            public Matrix4x4 Transform;
 
             public unsafe InstanceData(Matrix4x4 transform)
             {
@@ -54,23 +40,18 @@ namespace SceneGL.Testing
             }
         }
 
-        public struct UbScene
-        {
-            public Matrix4x4 ViewProjection;
-        }
+        private static CombinerMaterial.InstanceData[] s_instanceTransformResultBuffer = 
+            new CombinerMaterial.InstanceData[1];
 
-        public struct UbMaterial
-        {
-            public Vector4 Color;
-        }
+        
 
         private static uint s_instanceBuffer;
         private static BufferRange s_sceneDataBuffer;
-        private static MaterialShader? s_materialShader;
         private static RenderableModel? s_model;
 
         private static uint s_texture;
         private static uint s_sampler;
+        private static GlslColorExpression? s_shaderColorExpression;
         public static readonly ShaderSource VertexSource = new(
             "Instances.vert",
             ShaderType.VertexShader, """
@@ -142,21 +123,25 @@ namespace SceneGL.Testing
 
         public static void Initialize(GL gl)
         {
-            if (s_materialShader!=null)
+            if (s_shaderColorExpression!=null)
                 return;
+
+            var vColor = CombinerMaterial.VertexColor;
+            var uColor = CombinerMaterial.Color0;
+            var tex = CombinerMaterial.Texture0;
+            var instanceColor = CombinerMaterial.InstanceColor;
+
+            var temp = vColor + uColor + tex * tex.a * 0.1f;
+
+            s_shaderColorExpression = GlslColorExpression.mix(temp, instanceColor.withAlpha(1), instanceColor.a);
 
             s_instanceBuffer = BufferHelper.CreateBuffer(gl);
             ObjectLabelHelper.SetBufferLabel(gl, s_instanceBuffer, "Instances.InstanceBuffer");
 
             s_sceneDataBuffer = BufferHelper.CreateBuffer(gl, BufferUsageARB.StreamDraw, 
-                new UbScene { ViewProjection = Matrix4x4.Identity });
+                new CombinerMaterial.UbScene { ViewProjection = Matrix4x4.Identity });
 
             ObjectLabelHelper.SetBufferLabel(gl, s_sceneDataBuffer.Buffer, "Instances.SceneDataBuffer");
-
-            s_materialShader = new MaterialShader(new ShaderProgram(VertexSource, FragmentSource), 
-                sceneBlockBinding: "ubScene",
-                materialBlockBinding: "ubMaterial",
-                instanceDataBlock: ("ubInstanceData", 1000));
 
             //texture
             {
@@ -333,20 +318,19 @@ namespace SceneGL.Testing
             #endregion
         }
 
-        public static Material<UbMaterial> CreateMaterial(Vector4 color)
+        public static Material<CombinerMaterial.UbMaterial> CreateMaterial(GL gl, Vector4 color)
         {
-            if (s_materialShader==null)
+            if (s_shaderColorExpression == null)
                 throw new InvalidOperationException($@"{nameof(Instances)} must be initialized before any calls to {nameof(CreateMaterial)}");
 
-            return s_materialShader.CreateMaterial(new UbMaterial { Color = color }, new SamplerBinding[]
-            {
-                new SamplerBinding("uTex", s_sampler, s_texture)
-            });
+            return CombinerMaterial.CreateMaterial(gl, s_shaderColorExpression,
+                new CombinerMaterial.UbMaterial { Color0 = color }, 
+                texture0: new TextureSampler(s_sampler, s_texture));
         }
 
         public unsafe static void Render(GL gl, Material material, in Matrix4x4 viewProjection, ReadOnlySpan<InstanceData> instanceData)
         {
-            if (s_materialShader==null)
+            if (s_shaderColorExpression == null)
                 throw new InvalidOperationException($@"{nameof(Instances)} must be initialized before any calls to {nameof(Render)}");
 
             if (s_instanceTransformResultBuffer.Length < instanceData.Length)
@@ -354,7 +338,7 @@ namespace SceneGL.Testing
                 int len = 1;
                 while (len < instanceData.Length) len *= 2;
 
-                s_instanceTransformResultBuffer = new InstanceData[len];
+                s_instanceTransformResultBuffer = new CombinerMaterial.InstanceData[len];
             }
 
             for (int i = 0; i < instanceData.Length; i++)
@@ -372,19 +356,24 @@ namespace SceneGL.Testing
 
                 var rotation = Quaternion.Slerp(Quaternion.Identity, destRotation, MathF.Pow(scaleFade, 10));
 
-                data.Transform = Matrix4x4.CreateScale(1- scaleFade * scaleFade) * Matrix4x4.CreateFromQuaternion(rotation) * transform;
-                data.TintColor = new Vector4(1, 1, 1, colorFade * colorFade * 0.5f);
-                s_instanceTransformResultBuffer[i] = data;
+                var newData = new CombinerMaterial.InstanceData
+                {
+                    Transform = Matrix4x4.CreateScale(1 - scaleFade * scaleFade) *
+                    Matrix4x4.CreateFromQuaternion(rotation) * transform,
+                    Color = new Vector4(Vector3.One, colorFade * colorFade * 0.5f)
+                };
+                
+                s_instanceTransformResultBuffer[i] = newData;
             }
 
             BufferHelper.UpdateBufferData(gl, s_sceneDataBuffer, 
-                new UbScene
+                new CombinerMaterial.UbScene
                 {
                     ViewProjection = viewProjection 
                 });
 
             
-            if (s_materialShader!.TryUse(gl,
+            if (material.Shader!.TryUse(gl,
                 sceneData: s_sceneDataBuffer,
                 materialData: material.GetDataBuffer(gl),
                 materialSamplers:  material.Samplers,
@@ -398,8 +387,8 @@ namespace SceneGL.Testing
                 {
                     if (instanceBlockIndex.HasValue)
                     {
-                        var instanceBufferBinding = InstanceBufferHelper.UploadData<InstanceData>(
-                            gl, s_instanceBuffer, (int)s_materialShader.MaxInstanceCount!.Value,
+                        var instanceBufferBinding = InstanceBufferHelper.UploadData<CombinerMaterial.InstanceData>(
+                            gl, s_instanceBuffer, (int)material.Shader.MaxInstanceCount!.Value,
                             s_instanceTransformResultBuffer, BufferUsageARB.StreamDraw);
 
                         for (int i = 0; i < instanceBufferBinding.Blocks.Count; i++)

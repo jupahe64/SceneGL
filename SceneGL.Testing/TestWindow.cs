@@ -17,6 +17,7 @@ using SceneGL.GLWrappers;
 using Framebuffer = SceneGL.GLWrappers.Framebuffer;
 using SixLabors.ImageSharp.ColorSpaces;
 using SceneGL.GLHelpers;
+using SceneGL.Materials;
 
 namespace SceneGL.Testing
 {
@@ -51,8 +52,8 @@ namespace SceneGL.Testing
         private bool _isSceneHoveredBeforeDrag;
 
         private List<Instances.InstanceData> _instanceData;
-        private List<Gizmos.InstanceData> _gizmoPositions;
-        private Material<Instances.UbMaterial>? _material;
+        private readonly List<Gizmos.InstanceData> _gizmoPositions;
+        private Material<CombinerMaterial.UbMaterial>? _material;
 
         public TestWindow()
         {
@@ -242,7 +243,7 @@ namespace SceneGL.Testing
             InfiniteGrid.Initialize(_gl);
             Gizmos.Initialize(_gl);
 
-            _material = Instances.CreateMaterial(_color);
+            _material = Instances.CreateMaterial(_gl, _color);
 
             if (isDebugLogSupported)
             {
@@ -437,7 +438,7 @@ namespace SceneGL.Testing
                 {
                     var mat = _material!.GetData();
 
-                    mat.Color = _color;
+                    mat.Color0 = _color;
 
                     _material!.SetData(mat);
                 }

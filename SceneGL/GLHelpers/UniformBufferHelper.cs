@@ -68,5 +68,61 @@ namespace SceneGL.GLHelpers
                     packed.M14, packed.M24, packed.M34, 1
                     );
         }
+
+
+
+        /// <summary>
+        /// packs the given transform matrix into a row_major 4x3 matrix for packing in a uniform buffer
+        /// <para>Will only work reliably if the uniform block has <code>layout (std140, row_major)</code></para>
+        /// </summary>
+        /// <param name="transform"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Matrix2X4<float> Pack2dTransformMatrix(in Matrix3x2 transform)
+        {
+            Matrix2X4<float> mtx = default;
+
+            Pack2dTransformMatrix(transform, ref mtx);
+            return mtx;
+        }
+
+        /// <summary>
+        /// packs the given transform matrix into a row_major 4x3 matrix for packing in a uniform buffer
+        /// <para>Will only work reliably if the uniform block has <code>layout (std140, row_major)</code></para>
+        /// </summary>
+        /// <param name="transform"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void Pack2dTransformMatrix(in Matrix3x2 transform, ref Matrix2X4<float> dest)
+        {
+            dest.M11 = transform.M11;
+            dest.M21 = transform.M12;
+
+            dest.M12 = transform.M21;
+            dest.M22 = transform.M22;
+
+            dest.M13 = transform.M31;
+            dest.M23 = transform.M32;
+
+            //padding for alignment
+            dest.M14 = 0;
+            dest.M24 = 0;
+        }
+
+        /// <summary>
+        /// unpacks the given row_major 4x3 matrix into a transform matrix
+        /// <para>meant to be used with/after <see cref="Pack3dTransformMatrix(in Matrix3x2, ref Matrix2X4{float})"/></para>
+        /// </summary>
+        /// <param name="transform"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Matrix3x2 Unpack2dTransformMatrix(in Matrix2X4<float> packed)
+        {
+            return new(
+                    packed.M11, packed.M21,
+                    packed.M12, packed.M22,
+                    packed.M13, packed.M23
+                    );
+        }
     }
 }
