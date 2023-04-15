@@ -3,11 +3,17 @@ using System.Diagnostics;
 using SceneGL.Util;
 using System.Runtime.InteropServices;
 using SceneGL.GLHelpers;
+using System.Diagnostics.CodeAnalysis;
 
 namespace SceneGL.GLWrappers
 {
-    public delegate void CompileResultCallback(bool success, string? errorMessage);
+    public delegate void CompileResultCallback(ShaderProgram program, ShaderCompilationResult compilationResult);
     public delegate void ShaderSourceUpdate(CompileResultCallback? resultCallback);
+
+    public record struct ShaderCompilationResult(
+        bool Success, 
+        Dictionary<ShaderSource, string>? ShaderErrors, string? LinkingError
+    );
 
     public class ShaderSource
     {
@@ -34,8 +40,10 @@ namespace SceneGL.GLWrappers
     }
     public record UniformInfo(string Name, UniformType Type, int Location);
 
+    public delegate void CompilationFailedHandler(Dictionary<ShaderSource, string> shaderErrors, string linkingError);
+
     /// <summary>
-    /// A thin wrapper of an OpenGL ShaderProgram that simplifies common operations and working with multiple contexts
+    /// A thin wrapper of an OpenGL ShaderProgram that simplifies common operations
     /// </summary>
     public sealed class ShaderProgram
     {
@@ -60,6 +68,8 @@ namespace SceneGL.GLWrappers
         private Dictionary<string, int>? _uniformLocations = null;
         private Dictionary<string, uint>? _uniformBlockIndices = null;
 
+        public event CompilationFailedHandler? CompilationFailed;
+
         public IReadOnlyList<UniformInfo> UniformInfos
         {
             get
@@ -69,9 +79,10 @@ namespace SceneGL.GLWrappers
             }
         }
 
+        public IReadOnlyList<ShaderSource> ShaderSources => _shadersSources;
+
         private UniformInfo[] _uniformInfos = Array.Empty<UniformInfo>();
         private readonly ShaderSource[] _shadersSources;
-        private readonly string? _name;
 
         private List<CompileResultCallback> _compileResultCallbacks = new();
 
@@ -154,33 +165,46 @@ namespace SceneGL.GLWrappers
             gl.GetProgram(program, ProgramPropertyARB.LinkStatus, out var val);
             bool success = val == 1;
 
-            foreach (uint shader in shaders)
-            {
-                gl.DetachShader(program, shader);
-                gl.DeleteShader(shader);
-            }
+            Dictionary<ShaderSource, string>? errorMessages = null;
 
-            string? errorMessage = null;
-
-
+            string? linkingError = null;
 
             if (!success)
             {
-                errorMessage = gl.GetProgramInfoLog(program);
+                errorMessages = new();
+
+                for (int i = 0; i < shaders.Length; i++)
+                {
+                    errorMessages[_shadersSources[i]] = gl.GetShaderInfoLog(shaders[i]);
+                }
+
+                linkingError = gl.GetProgramInfoLog(program);
 
                 gl.DeleteProgram(program);
 
                 program = 0;
             }
 
-            if (_compileResultCallbacks.Count == 0)
+            foreach (uint shader in shaders)
             {
-                Debug.WriteLine(errorMessage);
+                gl.DetachShader(program, shader);
+                gl.DeleteShader(shader);
             }
+
+            if (_compileResultCallbacks.Count == 0 && !success)
+            {
+                Debug.WriteLine($"ShaderProgram {programLabel} failed to compile:\n{
+                    string.Join("\n\n", errorMessages!.Select((kvp)=> 
+                        $"{kvp.Key.Name}\n{kvp.Value}\n\n{linkingError}"))
+                    }");
+            }
+
+            if (!success)
+                CompilationFailed?.Invoke(errorMessages!, linkingError!);
 
             foreach (var callback in _compileResultCallbacks)
             {
-                callback(success, errorMessage);
+                callback(this, new(success, errorMessages, linkingError));
             }
 
             _compileResultCallbacks.Clear();
