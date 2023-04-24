@@ -46,7 +46,7 @@ namespace SceneGL.Testing
         
 
         private static uint s_instanceBuffer;
-        private static BufferRange s_sceneDataBuffer;
+        private static CombinerMaterial.SceneParameters? s_sceneParameters;
         private static RenderableModel? s_model;
 
         private static uint s_texture;
@@ -70,10 +70,9 @@ namespace SceneGL.Testing
             s_instanceBuffer = BufferHelper.CreateBuffer(gl);
             ObjectLabelHelper.SetBufferLabel(gl, s_instanceBuffer, "Instances.InstanceBuffer");
 
-            s_sceneDataBuffer = BufferHelper.CreateBuffer(gl, BufferUsageARB.StreamDraw, 
-                new CombinerMaterial.UbScene { ViewProjection = Matrix4x4.Identity });
+            s_sceneParameters = CombinerMaterial.CreateSceneParameters(gl, Matrix4x4.Identity);
 
-            ObjectLabelHelper.SetBufferLabel(gl, s_sceneDataBuffer.Buffer, "Instances.SceneDataBuffer");
+            //ObjectLabelHelper.SetBufferLabel(gl, s_sceneParameters.Buffer, "Instances.SceneDataBuffer");
 
             //texture
             {
@@ -250,17 +249,17 @@ namespace SceneGL.Testing
             #endregion
         }
 
-        public static Material<CombinerMaterial.UbMaterial> CreateMaterial(GL gl, Vector4 color)
+        public static CombinerMaterial CreateMaterial(GL gl, Vector4 color)
         {
             if (s_shaderColorExpression == null)
                 throw new InvalidOperationException($@"{nameof(Instances)} must be initialized before any calls to {nameof(CreateMaterial)}");
 
             return CombinerMaterial.CreateMaterial(gl, s_shaderColorExpression,
-                new CombinerMaterial.UbMaterial { Color0 = color }, 
+                new CombinerMaterial.MaterialData { Color0 = color }, 
                 texture0: new TextureSampler(s_sampler, s_texture));
         }
 
-        public unsafe static void Render(GL gl, Material material, in Matrix4x4 viewProjection, ReadOnlySpan<InstanceData> instanceData)
+        public unsafe static void Render(GL gl, CombinerMaterial material, in Matrix4x4 viewProjection, ReadOnlySpan<InstanceData> instanceData)
         {
             if (s_shaderColorExpression == null)
                 throw new InvalidOperationException($@"{nameof(Instances)} must be initialized before any calls to {nameof(Render)}");
@@ -298,20 +297,12 @@ namespace SceneGL.Testing
                 s_instanceTransformResultBuffer[i] = newData;
             }
 
-            BufferHelper.UpdateBufferData(gl, s_sceneDataBuffer, 
-                new CombinerMaterial.UbScene
-                {
-                    ViewProjection = viewProjection 
-                });
+            s_sceneParameters!.ViewProjection = viewProjection;
 
             
-            if (material.Shader!.TryUse(gl,
-                sceneData: s_sceneDataBuffer,
-                materialData: material.GetDataBuffer(gl),
-                materialSamplers:  material.Samplers,
-                otherUBOData: null,
-                otherSamplers: null,
-                out MaterialShaderScope scope,
+            if (material.TryUse(gl,
+                s_sceneParameters,
+                out ProgramUniformScope scope,
                 out uint? instanceBlockIndex
                 ))
             {
@@ -320,7 +311,7 @@ namespace SceneGL.Testing
                     if (instanceBlockIndex.HasValue)
                     {
                         var instanceBufferBinding = InstanceBufferHelper.UploadData<CombinerMaterial.InstanceData>(
-                            gl, s_instanceBuffer, (int)material.Shader.MaxInstanceCount!.Value,
+                            gl, s_instanceBuffer, (int)CombinerMaterial.MaxInstanceCount,
                             s_instanceTransformResultBuffer, BufferUsageARB.StreamDraw);
 
                         for (int i = 0; i < instanceBufferBinding.Blocks.Count; i++)

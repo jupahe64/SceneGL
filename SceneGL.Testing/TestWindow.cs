@@ -32,7 +32,8 @@ namespace SceneGL.Testing
 
         private ShaderSource _vertexShaderSource = InfiniteGrid.VertexSource;
         private ShaderSource _fragmentShaderSource = InfiniteGrid.FragmentSource;
-        private string _shaderCodeError = string.Empty;
+        private Dictionary<ShaderSource, string> _shaderCodeErrors = new();
+        private Dictionary<(ShaderSource vert, ShaderSource frag), string> _shaderLinkingErrors = new();
 
         private Vector4 _color = Vector4.Zero;
         private Matrix4x4 _transform = Matrix4x4.Identity;
@@ -53,7 +54,7 @@ namespace SceneGL.Testing
 
         private List<Instances.InstanceData> _instanceData;
         private readonly List<Gizmos.InstanceData> _gizmoPositions;
-        private Material<CombinerMaterial.UbMaterial>? _material;
+        private CombinerMaterial? _material;
 
         public TestWindow()
         {
@@ -223,8 +224,8 @@ namespace SceneGL.Testing
 
                     Debug.WriteLine(messageContent);
 
-                    if (severity != GLEnum.DebugSeverityNotification)
-                        Debugger.Break();
+                    //if (severity != GLEnum.DebugSeverityNotification)
+                    //    Debugger.Break();
                 },
                 ReadOnlySpan<byte>.Empty);
             }
@@ -295,7 +296,7 @@ namespace SceneGL.Testing
                     )
                 ));
 
-                _initialLayoutSetup = true;
+                //_initialLayoutSetup = true;
             }
 
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(0));
@@ -436,11 +437,8 @@ namespace SceneGL.Testing
                 ImGui.SetNextItemWidth(150);
                 if(ImGui.ColorPicker4("Color", ref _color))
                 {
-                    var mat = _material!.GetData();
-
-                    mat.Color0 = _color;
-
-                    _material!.SetData(mat);
+                    _material!.MaterialParams = 
+                    _material!.MaterialParams with { Color0 = _color };
                 }
             }
 
@@ -465,36 +463,70 @@ namespace SceneGL.Testing
 
                     ComboItem(ColoredTriangle.VertexSource, ColoredTriangle.FragmentSource);
                     ComboItem(InfiniteGrid.VertexSource, InfiniteGrid.FragmentSource);
+                    ComboItem(DrawMaterial.VertexSource, DrawMaterial.FragmentSource);
 
                     ImGui.EndCombo();
                 }
 
                 sizeAvail = ImGui.GetContentRegionAvail();
 
+
+
+                void HandleCompilationResult(ShaderProgram shaderProgram, ShaderCompilationResult result)
+                {
+                    (ShaderSource vert, ShaderSource frag)? key = null;
+
+                    if (shaderProgram.ShaderSources.Count == 2)
+                        key = (shaderProgram.ShaderSources[0], shaderProgram.ShaderSources[1]);
+
+                    if (result.Success)
+                    {
+                        foreach (var source in shaderProgram.ShaderSources)
+                            _shaderCodeErrors.Remove(source);
+
+                        if (key is not null)
+                            _shaderLinkingErrors.Remove(key.Value);
+
+                        return;
+                    }
+
+                    foreach (var (shaderSource, error) in result.ShaderErrors!)
+                        _shaderCodeErrors[shaderSource] = error;
+
+                    if (key is not null)
+                        _shaderLinkingErrors[key.Value] = result.LinkingError!;
+                }
+
+
                 string vertexShaderCode = _vertexShaderSource.Code;
 
                 if (ImGui.InputTextMultiline("Vertex Shader Code", ref vertexShaderCode, 10000,
                     new Vector2(sizeAvail.X, 200)))
                 {
-                    _vertexShaderSource.UpdateSource(vertexShaderCode,
-                        (_, errorString) =>
-                        {
-                            _shaderCodeError = errorString ?? string.Empty;
-                        });
+                    _vertexShaderSource.UpdateSource(vertexShaderCode, HandleCompilationResult);
                 }
+                ImGui.TextColored(new Vector4(1, 0, 0, 1), 
+                    _shaderCodeErrors.GetValueOrDefault(_vertexShaderSource) 
+                    ?? string.Empty);
+
 
                 string fragmentShaderCode = _fragmentShaderSource.Code;
 
                 if (ImGui.InputTextMultiline("Fragment Shader Code", ref fragmentShaderCode, 10000,
                     new Vector2(sizeAvail.X, 200)))
                 {
-                    _fragmentShaderSource.UpdateSource(fragmentShaderCode,
-                        (_, errorString) =>
-                        {
-                            _shaderCodeError = errorString ?? string.Empty;
-                        });
+                    _fragmentShaderSource.UpdateSource(fragmentShaderCode, HandleCompilationResult);
                 }
-                ImGui.TextColored(new Vector4(1, 0, 0, 1), _shaderCodeError);
+                ImGui.TextColored(new Vector4(1, 0, 0, 1), 
+                    _shaderCodeErrors.GetValueOrDefault(_fragmentShaderSource) 
+                    ?? string.Empty);
+
+
+                ImGui.Separator();
+
+                ImGui.TextColored(new Vector4(1, 0, 0, 1),
+                    _shaderLinkingErrors.GetValueOrDefault((_vertexShaderSource, _fragmentShaderSource)) 
+                    ?? string.Empty);
             }
             ImGui.PopStyleColor(3);
             

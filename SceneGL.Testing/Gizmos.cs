@@ -36,10 +36,9 @@ namespace SceneGL.Testing
         private static UnlitMaterial.InstanceData[] s_instanceTransformResultBuffer = new UnlitMaterial.InstanceData[1];
 
         private static uint s_instanceBuffer;
-        private static BufferRange s_sceneDataBuffer;
-        private static readonly MaterialShader s_materialShader = UnlitMaterial.Shader;
+        private static UnlitMaterial.SceneParameters? s_sceneParameters;
         private static RenderableModel? s_model;
-        private static Material<UnlitMaterial.UbMaterial>? s_material;
+        private static UnlitMaterial? s_material;
 
         private static uint s_texture;
         private static uint s_sampler;
@@ -56,10 +55,9 @@ namespace SceneGL.Testing
             s_instanceBuffer = BufferHelper.CreateBuffer(gl);
             ObjectLabelHelper.SetBufferLabel(gl, s_instanceBuffer, "Gizmos.InstanceBuffer");
 
-            s_sceneDataBuffer = BufferHelper.CreateBuffer(gl, BufferUsageARB.StreamDraw,
-                new UnlitMaterial.UbScene { ViewProjection = Matrix4x4.Identity });
+            s_sceneParameters = UnlitMaterial.CreateSceneParameters(gl, Matrix4x4.Identity);
 
-            ObjectLabelHelper.SetBufferLabel(gl, s_sceneDataBuffer.Buffer, "Gizmos.SceneDataBuffer");
+            //ObjectLabelHelper.SetBufferLabel(gl, s_sceneParameters.Buffer, "Gizmos.SceneDataBuffer");
 
             //texture
             {
@@ -76,7 +74,7 @@ namespace SceneGL.Testing
 
             s_sampler = SamplerHelper.CreateMipMapSampler2D(gl, lodBias: -3);
 
-            s_material = UnlitMaterial.CreateMaterial(gl, Vector4.One, new TextureSampler(s_sampler, s_texture));
+            s_material = UnlitMaterial.CreateMaterial(gl, new TextureSampler(s_sampler, s_texture));
 
 
             #region Cube Model
@@ -100,8 +98,8 @@ namespace SceneGL.Testing
 
         public unsafe static void Render(GL gl, in Quaternion cameraRot, in Matrix4x4 viewProjection, ReadOnlySpan<InstanceData> instancePositions)
         {
-            if (s_materialShader==null)
-                throw new InvalidOperationException($@"{nameof(Gizmos)} must be initialized before any calls to {nameof(Render)}");
+            //if (s_materialShader==null)
+            //    throw new InvalidOperationException($@"{nameof(Gizmos)} must be initialized before any calls to {nameof(Render)}");
 
             if (s_instanceTransformResultBuffer.Length < instancePositions.Length)
             {
@@ -132,19 +130,11 @@ namespace SceneGL.Testing
             }
 
 
-            BufferHelper.UpdateBufferData(gl, s_sceneDataBuffer,
-                new UnlitMaterial.UbScene
-                {
-                    ViewProjection = viewProjection
-                });
+            s_sceneParameters!.ViewProjection = viewProjection;
 
-            if (s_materialShader!.TryUse(gl,
-                sceneData: s_sceneDataBuffer,
-                materialData: s_material!.GetDataBuffer(gl),
-                materialSamplers: s_material.Samplers,
-                otherUBOData: null,
-                otherSamplers: null,
-                out MaterialShaderScope scope,
+            if (s_material!.TryUse(gl,
+                s_sceneParameters,
+                out ProgramUniformScope scope,
                 out uint? instanceBlockIndex
             ))
             {
@@ -155,7 +145,7 @@ namespace SceneGL.Testing
                     if (instanceBlockIndex.HasValue)
                     {
                         var instanceBufferBinding = InstanceBufferHelper.UploadData<UnlitMaterial.InstanceData>(
-                            gl, s_instanceBuffer, (int)s_materialShader.MaxInstanceCount!.Value,
+                            gl, s_instanceBuffer, (int)UnlitMaterial.MaxInstanceCount,
                             s_instanceTransformResultBuffer, BufferUsageARB.StreamDraw);
 
                         for (int i = 0; i < instanceBufferBinding.Blocks.Count; i++)

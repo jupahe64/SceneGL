@@ -3,6 +3,13 @@ using System.Runtime.CompilerServices;
 
 namespace SceneGL.GLHelpers
 {
+    public record struct BufferRange(uint Buffer, int Offset, uint Size)
+    {
+        public BufferRange(uint Buffer, uint Size) :
+            this(Buffer, 0, Size)
+        { }
+    }
+
     public static class BufferHelper
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

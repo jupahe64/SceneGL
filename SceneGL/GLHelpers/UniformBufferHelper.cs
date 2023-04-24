@@ -87,7 +87,7 @@ namespace SceneGL.GLHelpers
         }
 
         /// <summary>
-        /// packs the given transform matrix into a row_major 4x3 matrix for packing in a uniform buffer
+        /// packs the given transform matrix into a row_major 4x2 matrix for packing in a uniform buffer
         /// <para>Will only work reliably if the uniform block has <code>layout (std140, row_major)</code></para>
         /// </summary>
         /// <param name="transform"></param>
@@ -110,8 +110,8 @@ namespace SceneGL.GLHelpers
         }
 
         /// <summary>
-        /// unpacks the given row_major 4x3 matrix into a transform matrix
-        /// <para>meant to be used with/after <see cref="Pack3dTransformMatrix(in Matrix3x2, ref Matrix2X4{float})"/></para>
+        /// unpacks the given row_major 4x2 matrix into a transform matrix
+        /// <para>meant to be used with/after <see cref="Pack2dTransformMatrix(in Matrix3x2, ref Matrix2X4{float})"/></para>
         /// </summary>
         /// <param name="transform"></param>
         /// <returns></returns>

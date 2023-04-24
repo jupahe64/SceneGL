@@ -69,9 +69,9 @@ namespace SceneGL.Materials
             new($"{a.Expression}*{b.Expression}");
     }
 
-    public static class CombinerMaterial
+    public class CombinerMaterial
     {
-        public struct UbMaterial
+        public struct MaterialData
         {
             public Vector4 Color0 = Vector4.One;
             public Vector4 Color1 = Vector4.One;
@@ -93,7 +93,7 @@ namespace SceneGL.Materials
             /// </summary>
             public Matrix2X4<float> Texture2TransformData = Matrix2X4<float>.Identity;
 
-            public UbMaterial()
+            public MaterialData()
             {
             }
 
@@ -134,9 +134,26 @@ namespace SceneGL.Materials
             }
         }
 
-        public struct UbScene
+        public struct SceneData
         {
             public Matrix4x4 ViewProjection;
+        }
+
+        public sealed class SceneParameters
+        {
+            private readonly UniformBuffer<SceneData> _buffer;
+            internal ShaderParams ShaderParameters { get; }
+
+            internal SceneParameters(UniformBuffer<SceneData> buffer, ShaderParams shaderParameters)
+            {
+                _buffer = buffer;
+                ShaderParameters = shaderParameters;
+            }
+
+            public Matrix4x4 ViewProjection { 
+                get => _buffer.Data.ViewProjection;
+                set => _buffer.SetData(_buffer.Data with { ViewProjection = value });
+            }
         }
 
         public const AttributeShaderLoc POSITION_LOC = AttributeShaderLoc.Loc0;
@@ -144,6 +161,8 @@ namespace SceneGL.Materials
         public const AttributeShaderLoc UV0_LOC = AttributeShaderLoc.Loc2;
         public const AttributeShaderLoc UV1_LOC = AttributeShaderLoc.Loc3;
         public const AttributeShaderLoc UV2_LOC = AttributeShaderLoc.Loc4;
+
+        public const uint MaxInstanceCount = 1000;
 
         public static readonly GlslColorExpression Color0 = new("uColor0");
         public static readonly GlslColorExpression Color1 = new("uColor1");
@@ -244,10 +263,20 @@ namespace SceneGL.Materials
                 """
             );
 
-        private static Dictionary<string, MaterialShader> _shaderCache = new();
+        public static SceneParameters CreateSceneParameters(GL gl, Matrix4x4 viewProjection)
+        {
+            var _params = ShaderParams.FromUniformBlockDataAndSamplers(gl, "ubScene", new SceneData
+            {
+                ViewProjection = viewProjection
+            }, Array.Empty<SamplerBinding>(), out UniformBuffer<SceneData> buffer);
 
-        public static Material<UbMaterial> CreateMaterial(GL gl, GlslColorExpression expression,
-            UbMaterial data,
+            return new SceneParameters(buffer, _params);
+        }
+
+        private static Dictionary<string, ShaderProgram> _shaderCache = new();
+
+        public static CombinerMaterial CreateMaterial(GL gl, GlslColorExpression expression,
+            MaterialData data,
             TextureSampler? texture0 = null,
             TextureSampler? texture1 = null,
             TextureSampler? texture2 = null
@@ -255,14 +284,11 @@ namespace SceneGL.Materials
         {
             string expressionCode = expression.Expression;
 
-            var shader = _shaderCache.GetOrCreate(expressionCode, 
-                () => new MaterialShader(
-                new ShaderProgram(s_VertexSource, CreateFragmentSource(expressionCode)),
-                sceneBlockBinding: "ubScene",
-                materialBlockBinding: "ubMaterial",
-                instanceDataBlock: ("ubInstanceData", 1000)));
+            var shaderProgram = _shaderCache.GetOrCreate(expressionCode, 
+                () => new ShaderProgram(s_VertexSource, CreateFragmentSource(expressionCode)));
 
-            return shader.CreateMaterial(data, new SamplerBinding[]
+            var shaderParams = ShaderParams.FromUniformBlockDataAndSamplers(gl, "ubMaterial",
+                data, new SamplerBinding[]
             {
                 new("uTexture0",
                 texture0?.Sampler??SamplerHelper.GetOrCreate(gl, SamplerHelper.DefaultSamplerKey.LINEAR),
@@ -275,7 +301,35 @@ namespace SceneGL.Materials
                 new("uTexture2",
                 texture2?.Sampler??SamplerHelper.GetOrCreate(gl, SamplerHelper.DefaultSamplerKey.LINEAR),
                 texture2?.Texture??TextureHelper.GetOrCreate(gl, TextureHelper.DefaultTextureKey.WHITE)),
-            });
+            }, out UniformBuffer<MaterialData> ubMaterial);
+
+            return new CombinerMaterial(shaderParams, ubMaterial, shaderProgram);
+        }
+
+        private ShaderProgram _shaderProgram;
+        private ShaderParams _shaderParameters;
+        private UniformBuffer<MaterialData> _ubMaterial;
+
+        public MaterialData MaterialParams
+        {
+            get => _ubMaterial.Data;
+            set => _ubMaterial.SetData(value);
+        }
+
+        public CombinerMaterial(ShaderParams shaderParams, UniformBuffer<MaterialData> ubMaterial, ShaderProgram shaderProgram)
+        {
+            _shaderParameters = shaderParams;
+            _ubMaterial = ubMaterial;
+            _shaderProgram = shaderProgram;
+        }
+
+        public bool TryUse(GL gl, SceneParameters sceneParameters, out ProgramUniformScope scope, out uint? instanceBufferIndex)
+        {
+            return _shaderProgram.TryUse(gl, "ubInstanceData", new ShaderParams[]
+            {
+                sceneParameters.ShaderParameters,
+                _shaderParameters
+            }, out scope, out instanceBufferIndex);
         }
     }
 }

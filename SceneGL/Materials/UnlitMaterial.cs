@@ -8,17 +8,13 @@ using System.Linq;
 using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
+using static SceneGL.Materials.CombinerMaterial;
 
 namespace SceneGL.Materials
 {
 
-    public static class UnlitMaterial
+    public class UnlitMaterial
     {
-        public struct UbMaterial
-        {
-            public Vector4 Color;
-        }
-
         public struct InstanceData
         {
             /// <summary>
@@ -37,10 +33,30 @@ namespace SceneGL.Materials
             }
         }
 
-        public struct UbScene
+        public struct SceneData
         {
             public Matrix4x4 ViewProjection;
         }
+
+        public sealed class SceneParameters
+        {
+            private UniformBuffer<SceneData> _buffer;
+            internal ShaderParams ShaderParameters { get; }
+
+            internal SceneParameters(UniformBuffer<SceneData> buffer, ShaderParams shaderParameters)
+            {
+                _buffer = buffer;
+                ShaderParameters = shaderParameters;
+            }
+
+            public Matrix4x4 ViewProjection
+            {
+                get => _buffer.Data.ViewProjection;
+                set => _buffer.SetData(_buffer.Data with { ViewProjection = value });
+            }
+        }
+
+        public const uint MaxInstanceCount = 1000;
 
         public const AttributeShaderLoc POSITION_LOC = AttributeShaderLoc.Loc0;
         public const AttributeShaderLoc UV_LOC = AttributeShaderLoc.Loc1;
@@ -69,7 +85,6 @@ namespace SceneGL.Materials
                 layout (location = 1) in vec2 aTexCoord;
 
                 out vec2 vTexCoord;
-                out vec4 vColor;
                 out vec4 vInstanceTintColor;
 
                 void main() {
@@ -108,20 +123,45 @@ namespace SceneGL.Materials
                 """
             );
 
-        public static readonly MaterialShader Shader = new(
-            new ShaderProgram(VertexSource, FragmentSource),
-                sceneBlockBinding: "ubScene",
-                materialBlockBinding: "ubMaterial",
-                instanceDataBlock: ("ubInstanceData", 1000));
+        private static ShaderProgram s_shaderProgram = new(VertexSource, FragmentSource);
 
-        public static Material<UbMaterial> CreateMaterial(GL gl, Vector4 color, TextureSampler? texture = null)
+        public static SceneParameters CreateSceneParameters(GL gl, Matrix4x4 viewProjection)
         {
-            return Shader.CreateMaterial(new UbMaterial { Color = color }, new SamplerBinding[]
+            var _params = ShaderParams.FromUniformBlockDataAndSamplers(gl, "ubScene", new SceneData
             {
-                new("uTexture", 
+                ViewProjection = viewProjection
+            }, Array.Empty<SamplerBinding>(), out UniformBuffer<SceneData> buffer);
+
+            return new SceneParameters(buffer, _params);
+        }
+
+        public static UnlitMaterial CreateMaterial(GL gl, TextureSampler? texture = null)
+        {
+            var shaderParams = ShaderParams.FromSamplers(
+                new SamplerBinding[]
+            {
+                new("uTexture",
                 texture?.Sampler??SamplerHelper.GetOrCreate(gl, SamplerHelper.DefaultSamplerKey.LINEAR),
                 texture?.Texture??TextureHelper.GetOrCreate(gl, TextureHelper.DefaultTextureKey.WHITE))
             });
+
+            return new UnlitMaterial(shaderParams);
+        }
+
+        private ShaderParams _shaderParameters;
+
+        public UnlitMaterial(ShaderParams shaderParams)
+        {
+            _shaderParameters = shaderParams;
+        }
+
+        public bool TryUse(GL gl, SceneParameters sceneParameters, out ProgramUniformScope scope, out uint? instanceBufferIndex)
+        {
+            return s_shaderProgram.TryUse(gl, "ubInstanceData", new ShaderParams[]
+            {
+                sceneParameters.ShaderParameters,
+                _shaderParameters
+            }, out scope, out instanceBufferIndex);
         }
     }
 }
