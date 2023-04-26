@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using Silk.NET.Maths;
 using SceneGL.Materials;
 using ImGuiNET;
+using SceneGL.Materials.Common;
 
 namespace SceneGL.Testing
 {
@@ -36,7 +37,7 @@ namespace SceneGL.Testing
         private static UnlitMaterial.InstanceData[] s_instanceTransformResultBuffer = new UnlitMaterial.InstanceData[1];
 
         private static uint s_instanceBuffer;
-        private static UnlitMaterial.SceneParameters? s_sceneParameters;
+        private static SceneParameters? s_sceneParameters;
         private static RenderableModel? s_model;
         private static UnlitMaterial? s_material;
 
@@ -55,7 +56,7 @@ namespace SceneGL.Testing
             s_instanceBuffer = BufferHelper.CreateBuffer(gl);
             ObjectLabelHelper.SetBufferLabel(gl, s_instanceBuffer, "Gizmos.InstanceBuffer");
 
-            s_sceneParameters = UnlitMaterial.CreateSceneParameters(gl, Matrix4x4.Identity, "Gizmos.SceneDataBuffer");
+            s_sceneParameters = SceneParameters.Create(Matrix4x4.Identity, "Gizmos.SceneDataBuffer");
 
             //texture
             {

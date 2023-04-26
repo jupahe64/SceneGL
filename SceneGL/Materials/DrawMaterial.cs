@@ -1,5 +1,6 @@
 ﻿using SceneGL.GLHelpers;
 using SceneGL.GLWrappers;
+using SceneGL.Materials.Common;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using System;
@@ -14,29 +15,6 @@ namespace SceneGL.Materials
 
     public static class DrawMaterial
     {
-        public struct SceneData
-        {
-            public Matrix4x4 ViewProjection;
-        }
-
-        public sealed class SceneParameters
-        {
-            private UniformBuffer<SceneData> _buffer;
-            internal ShaderParams ShaderParameters { get; }
-
-            internal SceneParameters(UniformBuffer<SceneData> buffer, ShaderParams shaderParameters)
-            {
-                _buffer = buffer;
-                ShaderParameters = shaderParameters;
-            }
-
-            public Matrix4x4 ViewProjection
-            {
-                get => _buffer.Data.ViewProjection;
-                set => _buffer.SetData(_buffer.Data with { ViewProjection = value });
-            }
-        }
-
         public const AttributeShaderLoc POSITION_LOC = AttributeShaderLoc.Loc0;
         public const AttributeShaderLoc COLOR_LOC = AttributeShaderLoc.Loc1;
 
@@ -82,19 +60,9 @@ namespace SceneGL.Materials
 
         private static readonly ShaderProgram s_shaderProgram = new ShaderProgram(VertexSource, FragmentSource);
 
-        public static SceneParameters CreateSceneParameters(GL gl, Matrix4x4 viewProjection, string? uniformBufferLabel = null)
-        {
-            var _params = ShaderParams.FromUniformBlockDataAndSamplers(gl, "ubScene", new SceneData
-            {
-                ViewProjection = viewProjection
-            }, uniformBufferLabel, Array.Empty<SamplerBinding>(), out UniformBuffer<SceneData> buffer);
-
-            return new SceneParameters(buffer, _params);
-        }
-
         public static bool TryUse(GL gl, SceneParameters sceneParameters, out ProgramUniformScope scope)
         {
-            return s_shaderProgram.TryUse(gl, null, new ShaderParams[]
+            return s_shaderProgram.TryUse(gl, null, new IShaderBindingContainer[]
             {
                 sceneParameters.ShaderParameters
             }, out scope, out _);

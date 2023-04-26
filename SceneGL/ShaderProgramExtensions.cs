@@ -43,7 +43,7 @@ namespace SceneGL
     public static class ShaderProgramExtensions
     {
         public static bool TryUse(this ShaderProgram self, GL gl, 
-            string? instanceBlockBinding, ShaderParams[] shaderParams, 
+            string? instanceBlockBinding, IShaderBindingContainer[] shaderParams, 
             out ProgramUniformScope scope, out uint? instanceBlockIndex)
         {
             instanceBlockIndex = null;
@@ -60,7 +60,7 @@ namespace SceneGL
 
             for (int i = 0; i < shaderParams.Length; i++)
             {
-                var (samplers, uniformBuffers) = shaderParams[i].GetBindings();
+                var (samplers, uniformBuffers) = shaderParams[i].GetBindings(gl);
 
                 for (int j = 0; j < uniformBuffers.Count; j++)
                 {

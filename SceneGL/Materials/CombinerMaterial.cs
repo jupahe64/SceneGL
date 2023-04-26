@@ -1,5 +1,6 @@
 ﻿using SceneGL.GLHelpers;
 using SceneGL.GLWrappers;
+using SceneGL.Materials.Common;
 using SceneGL.Util;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
@@ -69,7 +70,7 @@ namespace SceneGL.Materials
             new($"{a.Expression}*{b.Expression}");
     }
 
-    public class CombinerMaterial
+    public partial class CombinerMaterial
     {
         public struct MaterialData
         {
@@ -131,28 +132,6 @@ namespace SceneGL.Materials
             {
                 get => UniformBufferHelper.Unpack3dTransformMatrix(in TransformData);
                 set => UniformBufferHelper.Pack3dTransformMatrix(value, ref TransformData);
-            }
-        }
-
-        public struct SceneData
-        {
-            public Matrix4x4 ViewProjection;
-        }
-
-        public sealed class SceneParameters
-        {
-            private readonly UniformBuffer<SceneData> _buffer;
-            internal ShaderParams ShaderParameters { get; }
-
-            internal SceneParameters(UniformBuffer<SceneData> buffer, ShaderParams shaderParameters)
-            {
-                _buffer = buffer;
-                ShaderParameters = shaderParameters;
-            }
-
-            public Matrix4x4 ViewProjection { 
-                get => _buffer.Data.ViewProjection;
-                set => _buffer.SetData(_buffer.Data with { ViewProjection = value });
             }
         }
 
@@ -263,16 +242,6 @@ namespace SceneGL.Materials
                 """
             );
 
-        public static SceneParameters CreateSceneParameters(GL gl, Matrix4x4 viewProjection, string? uniformBufferLabel = null)
-        {
-            var _params = ShaderParams.FromUniformBlockDataAndSamplers(gl, "ubScene", new SceneData
-            {
-                ViewProjection = viewProjection
-            }, uniformBufferLabel, Array.Empty<SamplerBinding>(), out UniformBuffer<SceneData> buffer);
-
-            return new SceneParameters(buffer, _params);
-        }
-
         private static Dictionary<string, ShaderProgram> _shaderCache = new();
 
         public static CombinerMaterial CreateMaterial(GL gl, GlslColorExpression expression,
@@ -288,7 +257,7 @@ namespace SceneGL.Materials
             var shaderProgram = _shaderCache.GetOrCreate(expressionCode, 
                 () => new ShaderProgram(s_VertexSource, CreateFragmentSource(expressionCode)));
 
-            var shaderParams = ShaderParams.FromUniformBlockDataAndSamplers(gl, "ubMaterial",
+            var shaderParams = ShaderParams.FromUniformBlockDataAndSamplers("ubMaterial",
                 data, uniformBufferLabel, new SamplerBinding[]
             {
                 new("uTexture0",
@@ -326,7 +295,7 @@ namespace SceneGL.Materials
 
         public bool TryUse(GL gl, SceneParameters sceneParameters, out ProgramUniformScope scope, out uint? instanceBufferIndex)
         {
-            return _shaderProgram.TryUse(gl, "ubInstanceData", new ShaderParams[]
+            return _shaderProgram.TryUse(gl, "ubInstanceData", new IShaderBindingContainer[]
             {
                 sceneParameters.ShaderParameters,
                 _shaderParameters

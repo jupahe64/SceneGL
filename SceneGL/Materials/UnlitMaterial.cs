@@ -1,5 +1,6 @@
 ﻿using SceneGL.GLHelpers;
 using SceneGL.GLWrappers;
+using SceneGL.Materials.Common;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using System;
@@ -30,29 +31,6 @@ namespace SceneGL.Materials
             {
                 get => UniformBufferHelper.Unpack3dTransformMatrix(in TransformData);
                 set => UniformBufferHelper.Pack3dTransformMatrix(value, ref TransformData);
-            }
-        }
-
-        public struct SceneData
-        {
-            public Matrix4x4 ViewProjection;
-        }
-
-        public sealed class SceneParameters
-        {
-            private UniformBuffer<SceneData> _buffer;
-            internal ShaderParams ShaderParameters { get; }
-
-            internal SceneParameters(UniformBuffer<SceneData> buffer, ShaderParams shaderParameters)
-            {
-                _buffer = buffer;
-                ShaderParameters = shaderParameters;
-            }
-
-            public Matrix4x4 ViewProjection
-            {
-                get => _buffer.Data.ViewProjection;
-                set => _buffer.SetData(_buffer.Data with { ViewProjection = value });
             }
         }
 
@@ -125,16 +103,6 @@ namespace SceneGL.Materials
 
         private static ShaderProgram s_shaderProgram = new(VertexSource, FragmentSource);
 
-        public static SceneParameters CreateSceneParameters(GL gl, Matrix4x4 viewProjection, string? uniformBufferLabel = null)
-        {
-            var _params = ShaderParams.FromUniformBlockDataAndSamplers(gl, "ubScene", new SceneData
-            {
-                ViewProjection = viewProjection
-            }, uniformBufferLabel, Array.Empty<SamplerBinding>(), out UniformBuffer<SceneData> buffer);
-
-            return new SceneParameters(buffer, _params);
-        }
-
         public static UnlitMaterial CreateMaterial(GL gl, TextureSampler? texture = null)
         {
             var shaderParams = ShaderParams.FromSamplers(
@@ -157,7 +125,7 @@ namespace SceneGL.Materials
 
         public bool TryUse(GL gl, SceneParameters sceneParameters, out ProgramUniformScope scope, out uint? instanceBufferIndex)
         {
-            return s_shaderProgram.TryUse(gl, "ubInstanceData", new ShaderParams[]
+            return s_shaderProgram.TryUse(gl, "ubInstanceData", new IShaderBindingContainer[]
             {
                 sceneParameters.ShaderParameters,
                 _shaderParameters

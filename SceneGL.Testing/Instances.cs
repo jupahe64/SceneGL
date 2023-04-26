@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using Silk.NET.Maths;
 using SharpDX.Direct3D11;
 using SceneGL.Materials;
+using SceneGL.Materials.Common;
 
 namespace SceneGL.Testing
 {
@@ -46,7 +47,7 @@ namespace SceneGL.Testing
         
 
         private static uint s_instanceBuffer;
-        private static CombinerMaterial.SceneParameters? s_sceneParameters;
+        private static SceneParameters? s_sceneParameters;
         private static RenderableModel? s_model;
 
         private static uint s_texture;
@@ -70,7 +71,7 @@ namespace SceneGL.Testing
             s_instanceBuffer = BufferHelper.CreateBuffer(gl);
             ObjectLabelHelper.SetBufferLabel(gl, s_instanceBuffer, "Instances.InstanceBuffer");
 
-            s_sceneParameters = CombinerMaterial.CreateSceneParameters(gl, Matrix4x4.Identity, 
+            s_sceneParameters = SceneParameters.Create(Matrix4x4.Identity, 
                 "Instances.SceneDataBuffer");
 
             //texture

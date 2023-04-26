@@ -16,9 +16,17 @@ namespace SceneGL
     public record struct BufferBinding(string Binding, BufferRange BufferRange);
     public record struct SamplerBinding(string Binding, uint Sampler, uint Texture);
 
-    public class ShaderParams
+    /// <summary>
+    /// Contains a set of bindings to be used in a shader program. Use <see cref="ShaderParams"/> and it's static methods
+    /// </summary>
+    public interface IShaderBindingContainer
     {
-        public event Action? EvaluatingResources;
+        public (IReadOnlyList<SamplerBinding> samplers, IReadOnlyList<BufferBinding> uniformBuffers) GetBindings(GL gl);
+    }
+
+    public class ShaderParams : IShaderBindingContainer
+    {
+        public event Action<GL>? EvaluatingResources;
 
         private readonly SamplerBinding[] _samplers;
         private readonly BufferBinding[] _uniformBuffers;
@@ -31,7 +39,7 @@ namespace SceneGL
 
         public static ShaderParams FromSamplers(SamplerBinding[] samplers) => new(Array.Empty<BufferBinding>(), samplers);
 
-        public static ShaderParams FromUniformBlockDataAndSamplers<TData>(GL gl,
+        public static ShaderParams FromUniformBlockDataAndSamplers<TData>(
             string uniformBlockBinding, TData uniformBlockData, string? bufferLabel,
             SamplerBinding[] samplers, out UniformBuffer<TData> buffer)
             where TData : unmanaged
@@ -43,21 +51,21 @@ namespace SceneGL
                 new BufferBinding(uniformBlockBinding, default)
             }, samplers);
 
-            param.EvaluatingResources += () => param.SetBufferBinding(uniformBlockBinding, _buffer.GetDataBuffer(gl));
+            param.EvaluatingResources += (gl) => param.SetBufferBinding(uniformBlockBinding, _buffer.GetDataBuffer(gl));
 
             buffer = _buffer;
 
             return param;
         }
 
-        public void EvaluateResources()
+        public void EvaluateResources(GL gl)
         {
-            EvaluatingResources?.Invoke();
+            EvaluatingResources?.Invoke(gl);
         }
 
-        public (IReadOnlyList<SamplerBinding> samplers, IReadOnlyList<BufferBinding> uniformBuffers) GetBindings()
+        public (IReadOnlyList<SamplerBinding> samplers, IReadOnlyList<BufferBinding> uniformBuffers) GetBindings(GL gl)
         {
-            EvaluateResources();
+            EvaluateResources(gl);
 
             return (_samplers, _uniformBuffers);
         }
