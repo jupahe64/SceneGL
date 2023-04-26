@@ -78,61 +78,19 @@ namespace SceneGL.Materials
             public Vector4 Color1 = Vector4.One;
             public Vector4 Color2 = Vector4.One;
 
-            /// <summary>
-            /// The internal representation of <see cref="Texture0Transform"/>, 
-            /// not intended for direct access, use the property instead
-            /// </summary>
-            public Matrix2X4<float> Texture0TransformData = Matrix2X4<float>.Identity;
-            /// <summary>
-            /// The internal representation of <see cref="Texture1Transform"/>, 
-            /// not intended for direct access, use the property instead
-            /// </summary>
-            public Matrix2X4<float> Texture1TransformData = Matrix2X4<float>.Identity;
-            /// <summary>
-            /// The internal representation of <see cref="Texture2Transform"/>, 
-            /// not intended for direct access, use the property instead
-            /// </summary>
-            public Matrix2X4<float> Texture2TransformData = Matrix2X4<float>.Identity;
+            public PackedMatrix3x2 Texture0Transform = Matrix3x2.Identity;
+            public PackedMatrix3x2 Texture1Transform = Matrix3x2.Identity;
+            public PackedMatrix3x2 Texture2Transform = Matrix3x2.Identity;
 
             public MaterialData()
             {
-            }
-
-            public Matrix3x2 Texture0Transform
-            {
-                get => UniformBufferHelper.Unpack2dTransformMatrix(in Texture0TransformData);
-                set => UniformBufferHelper.Pack2dTransformMatrix(value, ref Texture0TransformData);
-            }
-
-            public Matrix3x2 Texture1Transform
-            {
-                get => UniformBufferHelper.Unpack2dTransformMatrix(in Texture1TransformData);
-                set => UniformBufferHelper.Pack2dTransformMatrix(value, ref Texture1TransformData);
-            }
-
-            public Matrix3x2 Texture2Transform
-            {
-                get => UniformBufferHelper.Unpack2dTransformMatrix(in Texture2TransformData);
-                set => UniformBufferHelper.Pack2dTransformMatrix(value, ref Texture2TransformData);
             }
         }
 
         public struct InstanceData
         {
-            /// <summary>
-            /// The internal representation of the Transform as a 4x3 row_major matrix, 
-            /// not intended for direct access, use <see cref="Transform"/> instead
-            /// </summary>
-            public Matrix3X4<float> TransformData;
+            public PackedMatrix4x3 Transform;
             public Vector4 Color;
-
-
-
-            public Matrix4x4 Transform
-            {
-                get => UniformBufferHelper.Unpack3dTransformMatrix(in TransformData);
-                set => UniformBufferHelper.Pack3dTransformMatrix(value, ref TransformData);
-            }
         }
 
         public const AttributeShaderLoc POSITION_LOC = AttributeShaderLoc.Loc0;
@@ -276,9 +234,12 @@ namespace SceneGL.Materials
             return new CombinerMaterial(shaderParams, ubMaterial, shaderProgram);
         }
 
-        private ShaderProgram _shaderProgram;
-        private ShaderParams _shaderParameters;
-        private UniformBuffer<MaterialData> _ubMaterial;
+
+
+
+        private readonly ShaderProgram _shaderProgram;
+        private readonly ShaderParams _shaderParameters;
+        private readonly UniformBuffer<MaterialData> _ubMaterial;
 
         public MaterialData MaterialParams
         {

@@ -18,20 +18,8 @@ namespace SceneGL.Materials
     {
         public struct InstanceData
         {
-            /// <summary>
-            /// The internal representation of the Transform as a 4x3 row_major matrix, 
-            /// not intended for direct access, use <see cref="Transform"/> instead
-            /// </summary>
-            public Matrix3X4<float> TransformData;
+            public PackedMatrix4x3 Transform;
             public Vector4 TintColor;
-
-
-
-            public Matrix4x4 Transform
-            {
-                get => UniformBufferHelper.Unpack3dTransformMatrix(in TransformData);
-                set => UniformBufferHelper.Pack3dTransformMatrix(value, ref TransformData);
-            }
         }
 
         public const uint MaxInstanceCount = 1000;
@@ -101,7 +89,7 @@ namespace SceneGL.Materials
                 """
             );
 
-        private static ShaderProgram s_shaderProgram = new(VertexSource, FragmentSource);
+        private static readonly ShaderProgram s_shaderProgram = new(VertexSource, FragmentSource);
 
         public static UnlitMaterial CreateMaterial(GL gl, TextureSampler? texture = null)
         {
@@ -116,7 +104,10 @@ namespace SceneGL.Materials
             return new UnlitMaterial(shaderParams);
         }
 
-        private ShaderParams _shaderParameters;
+
+
+
+        private readonly ShaderParams _shaderParameters;
 
         public UnlitMaterial(ShaderParams shaderParams)
         {
