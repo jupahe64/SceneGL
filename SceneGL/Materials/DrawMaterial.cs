@@ -41,7 +41,7 @@ namespace SceneGL.Materials
         public const AttributeShaderLoc COLOR_LOC = AttributeShaderLoc.Loc1;
 
         public static readonly ShaderSource VertexSource = new(
-            "Instances.vert",
+            "DrawMaterial.vert",
             ShaderType.VertexShader, """
                 #version 330
 
@@ -64,7 +64,7 @@ namespace SceneGL.Materials
             );
 
         public static readonly ShaderSource FragmentSource = new(
-            "Instances.frag",
+            "DrawMaterial.frag",
             ShaderType.FragmentShader, """
                 #version 330
                 
@@ -82,12 +82,12 @@ namespace SceneGL.Materials
 
         private static readonly ShaderProgram s_shaderProgram = new ShaderProgram(VertexSource, FragmentSource);
 
-        public static SceneParameters CreateSceneParameters(GL gl, Matrix4x4 viewProjection)
+        public static SceneParameters CreateSceneParameters(GL gl, Matrix4x4 viewProjection, string? uniformBufferLabel = null)
         {
             var _params = ShaderParams.FromUniformBlockDataAndSamplers(gl, "ubScene", new SceneData
             {
                 ViewProjection = viewProjection
-            }, Array.Empty<SamplerBinding>(), out UniformBuffer<SceneData> buffer);
+            }, uniformBufferLabel, Array.Empty<SamplerBinding>(), out UniformBuffer<SceneData> buffer);
 
             return new SceneParameters(buffer, _params);
         }

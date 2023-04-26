@@ -176,7 +176,7 @@ namespace SceneGL.Materials
         public static readonly GlslColorExpression InstanceColor = new("vInstanceColor");
 
         private static readonly ShaderSource s_VertexSource = new(
-            "Instances.vert",
+            "CombinerMaterial.vert",
             ShaderType.VertexShader, """
                 #version 330
 
@@ -225,7 +225,7 @@ namespace SceneGL.Materials
             );
 
         private static ShaderSource CreateFragmentSource(string combinerExpressionCode) => new(
-            "Instances.frag",
+            "CombinerMaterial.frag",
             ShaderType.FragmentShader, $$"""
                 #version 330
                 
@@ -263,12 +263,12 @@ namespace SceneGL.Materials
                 """
             );
 
-        public static SceneParameters CreateSceneParameters(GL gl, Matrix4x4 viewProjection)
+        public static SceneParameters CreateSceneParameters(GL gl, Matrix4x4 viewProjection, string? uniformBufferLabel = null)
         {
             var _params = ShaderParams.FromUniformBlockDataAndSamplers(gl, "ubScene", new SceneData
             {
                 ViewProjection = viewProjection
-            }, Array.Empty<SamplerBinding>(), out UniformBuffer<SceneData> buffer);
+            }, uniformBufferLabel, Array.Empty<SamplerBinding>(), out UniformBuffer<SceneData> buffer);
 
             return new SceneParameters(buffer, _params);
         }
@@ -279,7 +279,8 @@ namespace SceneGL.Materials
             MaterialData data,
             TextureSampler? texture0 = null,
             TextureSampler? texture1 = null,
-            TextureSampler? texture2 = null
+            TextureSampler? texture2 = null, 
+            string? uniformBufferLabel = null
             )
         {
             string expressionCode = expression.Expression;
@@ -288,7 +289,7 @@ namespace SceneGL.Materials
                 () => new ShaderProgram(s_VertexSource, CreateFragmentSource(expressionCode)));
 
             var shaderParams = ShaderParams.FromUniformBlockDataAndSamplers(gl, "ubMaterial",
-                data, new SamplerBinding[]
+                data, uniformBufferLabel, new SamplerBinding[]
             {
                 new("uTexture0",
                 texture0?.Sampler??SamplerHelper.GetOrCreate(gl, SamplerHelper.DefaultSamplerKey.LINEAR),

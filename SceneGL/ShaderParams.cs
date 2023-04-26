@@ -32,11 +32,11 @@ namespace SceneGL
         public static ShaderParams FromSamplers(SamplerBinding[] samplers) => new(Array.Empty<BufferBinding>(), samplers);
 
         public static ShaderParams FromUniformBlockDataAndSamplers<TData>(GL gl,
-            string uniformBlockBinding, TData uniformBlockData, 
+            string uniformBlockBinding, TData uniformBlockData, string? bufferLabel,
             SamplerBinding[] samplers, out UniformBuffer<TData> buffer)
             where TData : unmanaged
         {
-            var _buffer = new UniformBuffer<TData>(uniformBlockData);
+            var _buffer = new UniformBuffer<TData>(uniformBlockData, bufferLabel);
 
             var param = new ShaderParams(new BufferBinding[]
             {
@@ -100,11 +100,13 @@ namespace SceneGL
         private T[] _data;
         private int _dataBufferSize = -1;
         private bool _isDataDirty;
+        private string? _label;
 
-        public UniformArrayBuffer(ReadOnlySpan<T> data)
+        public UniformArrayBuffer(ReadOnlySpan<T> data, string? label = null)
         {
             _data = data.ToArray();
             _isDataDirty = true;
+            _label = label;
         }
 
         /// <summary>
@@ -133,6 +135,9 @@ namespace SceneGL
                 gl.BindBuffer(BufferTargetARB.UniformBuffer, _dataBuffer);
                 gl.BufferData<T>(BufferTargetARB.UniformBuffer, _data, BufferUsageARB.StaticDraw);
                 gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
+
+                if (_label is not null)
+                    ObjectLabelHelper.SetBufferLabel(gl, _dataBuffer, _label);
             }
             else if (_isDataDirty)
             {
@@ -154,10 +159,12 @@ namespace SceneGL
         private bool _isBufferInitialized = false;
         private uint _dataBuffer;
         private TData _data;
+        private string? _label;
 
-        public UniformBuffer(TData data)
+        public UniformBuffer(TData data, string? label)
         {
             _data = data;
+            _label = label;
         }
 
         /// <summary>
@@ -185,6 +192,10 @@ namespace SceneGL
                 gl.BindBuffer(BufferTargetARB.UniformBuffer, _dataBuffer);
                 gl.BufferData<TData>(BufferTargetARB.UniformBuffer, (uint)sizeof(TData), in _data, BufferUsageARB.StaticDraw);
                 gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
+                if (_label is not null)
+                    ObjectLabelHelper.SetBufferLabel(gl, _dataBuffer, _label);
+
+                _isBufferInitialized = true;
             }
             else if (_isDataDirty)
             {

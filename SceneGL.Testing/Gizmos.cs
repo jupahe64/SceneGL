@@ -55,9 +55,7 @@ namespace SceneGL.Testing
             s_instanceBuffer = BufferHelper.CreateBuffer(gl);
             ObjectLabelHelper.SetBufferLabel(gl, s_instanceBuffer, "Gizmos.InstanceBuffer");
 
-            s_sceneParameters = UnlitMaterial.CreateSceneParameters(gl, Matrix4x4.Identity);
-
-            //ObjectLabelHelper.SetBufferLabel(gl, s_sceneParameters.Buffer, "Gizmos.SceneDataBuffer");
+            s_sceneParameters = UnlitMaterial.CreateSceneParameters(gl, Matrix4x4.Identity, "Gizmos.SceneDataBuffer");
 
             //texture
             {
@@ -98,8 +96,8 @@ namespace SceneGL.Testing
 
         public unsafe static void Render(GL gl, in Quaternion cameraRot, in Matrix4x4 viewProjection, ReadOnlySpan<InstanceData> instancePositions)
         {
-            //if (s_materialShader==null)
-            //    throw new InvalidOperationException($@"{nameof(Gizmos)} must be initialized before any calls to {nameof(Render)}");
+            if (!s_isInitialized)
+                throw new InvalidOperationException($@"{nameof(Gizmos)} must be initialized before any calls to {nameof(Render)}");
 
             if (s_instanceTransformResultBuffer.Length < instancePositions.Length)
             {

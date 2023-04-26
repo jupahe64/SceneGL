@@ -1,4 +1,5 @@
-﻿using SceneGL.GLWrappers;
+﻿using SceneGL.GLHelpers;
+using SceneGL.GLWrappers;
 using SceneGL.Util;
 using Silk.NET.OpenGL;
 using System;
@@ -120,10 +121,8 @@ namespace SceneGL
         {
             VertexStructDescription description = VertexStructDescription.From<TVertex>();
 
-            uint vertexBuffer = gl.GenBuffer();
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, vertexBuffer);
-            gl.BufferData(BufferTargetARB.ArrayBuffer, vertices, BufferUsageARB.StaticDraw);
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
+            var (vertexBuffer, _, _) = BufferHelper.CreateBuffer(gl, BufferUsageARB.StaticDraw, vertices);
+            ObjectLabelHelper.SetBufferLabel(gl, vertexBuffer, $"VertexBuffer {vertexBuffer}");
 
             return Create((uint)vertices.Length, null, (vertexBuffer, description));
         }
@@ -136,15 +135,11 @@ namespace SceneGL
 
             var drawElementsType = GetDrawElementsType<TIndex>(out int indicesPerElement);
 
-            uint indexBuffer = gl.GenBuffer();
-            gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, indexBuffer);
-            gl.BufferData(BufferTargetARB.ElementArrayBuffer, indices, BufferUsageARB.StaticDraw);
-            gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, 0);
+            var (indexBuffer, _, _) = BufferHelper.CreateBuffer(gl, BufferUsageARB.StaticDraw, indices);
+            ObjectLabelHelper.SetBufferLabel(gl, indexBuffer, $"IndexBuffer {indexBuffer}");
 
-            uint vertexBuffer = gl.GenBuffer();
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, vertexBuffer);
-            gl.BufferData(BufferTargetARB.ArrayBuffer, vertices, BufferUsageARB.StaticDraw);
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
+            var (vertexBuffer, _, _) = BufferHelper.CreateBuffer(gl, BufferUsageARB.StaticDraw, vertices);
+            ObjectLabelHelper.SetBufferLabel(gl, vertexBuffer, $"VertexBuffer {vertexBuffer}");
 
             return Create((uint)(indices.Length * indicesPerElement), (drawElementsType, indexBuffer), (vertexBuffer, description));
         }
