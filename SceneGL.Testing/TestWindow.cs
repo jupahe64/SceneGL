@@ -18,6 +18,7 @@ using Framebuffer = SceneGL.GLWrappers.Framebuffer;
 using SixLabors.ImageSharp.ColorSpaces;
 using SceneGL.GLHelpers;
 using SceneGL.Materials;
+using EditTK;
 
 namespace SceneGL.Testing
 {
@@ -262,6 +263,48 @@ namespace SceneGL.Testing
             _imguiController.Update((float)deltaSeconds);
         }
 
+        private void UpdateCamera(bool sceneViewHovered, Camera camera, double deltaSeconds,
+            out Vector3 eyeAnimated, out Quaternion rotAnimated, out Matrix4x4 viewMatrix)
+        {
+            if (sceneViewHovered)
+            {
+                if (ImGui.IsMouseDragging(ImGuiMouseButton.Right))
+                {
+                    Vector2 delta = ImGui.GetMousePos() - _previous_mousePos;
+
+                    Vector3 right = Vector3.Transform(Vector3.UnitX, camera.Rotation);
+                    camera.Rotation = Quaternion.CreateFromAxisAngle(right, -delta.Y * 0.002f) * camera.Rotation;
+
+                    camera.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, -delta.X * 0.002f) * camera.Rotation;
+                }
+
+                float camMoveSpeed = (float)(0.4 * deltaSeconds * 60);
+
+                var keyboard = _input!.Keyboards[0];
+
+                if (keyboard.IsKeyPressed(Key.W))
+                    camera.Eye -= Vector3.Transform(Vector3.UnitZ * camMoveSpeed, camera.Rotation);
+                if (keyboard.IsKeyPressed(Key.S))
+                    camera.Eye += Vector3.Transform(Vector3.UnitZ * camMoveSpeed, camera.Rotation);
+
+                if (keyboard.IsKeyPressed(Key.A))
+                    camera.Eye -= Vector3.Transform(Vector3.UnitX * camMoveSpeed, camera.Rotation);
+                if (keyboard.IsKeyPressed(Key.D))
+                    camera.Eye += Vector3.Transform(Vector3.UnitX * camMoveSpeed, camera.Rotation);
+
+                if (keyboard.IsKeyPressed(Key.Q))
+                    camera.Eye -= Vector3.UnitY * camMoveSpeed;
+                if (keyboard.IsKeyPressed(Key.E))
+                    camera.Eye += Vector3.UnitY * camMoveSpeed;
+            }
+
+            _camera.Animate(deltaSeconds, out eyeAnimated, out rotAnimated);
+
+            viewMatrix =
+                Matrix4x4.CreateTranslation(-eyeAnimated) *
+                Matrix4x4.CreateFromQuaternion(Quaternion.Inverse(rotAnimated));
+        }
+
         private void Render(double deltaSeconds)
         {
             Debug.Assert(_gl != null);
@@ -343,8 +386,6 @@ namespace SceneGL.Testing
             
             Vector2 sizeAvail = ImGui.GetContentRegionAvail();
 
-            float aspectRatio = 1;
-
             bool isSceneHovered = false;
 
             bool isRightDragging = ImGui.IsMouseDragging(ImGuiMouseButton.Right);
@@ -354,15 +395,42 @@ namespace SceneGL.Testing
                 _sceneFB.SetSize((uint)sizeAvail.X, (uint)sizeAvail.Y);
                 _sceneFB.Create(_gl);
 
-                ImGui.Image(new IntPtr(_sceneFB.GetColorTexture(0)), new(sizeAvail.X, sizeAvail.Y),
+                var topLeft = ImGui.GetCursorPos();
+
+                var size = new Vector2(sizeAvail.X, sizeAvail.Y);
+
+                ImGui.Image(new IntPtr(_sceneFB.GetColorTexture(0)), size,
                     new Vector2(0, 1), new Vector2(1, 0));
 
-                if(ImGui.IsItemHovered())
+                float aspectRatio = sizeAvail.X / sizeAvail.Y;
+
+                if (ImGui.IsItemHovered())
                 {
                     isSceneHovered = true;
                 }
 
-                aspectRatio = sizeAvail.X / sizeAvail.Y;
+
+                UpdateCamera(isSceneHovered || _isSceneHoveredBeforeDrag,
+                    _camera, deltaSeconds, out Vector3 eyeAnimated, out Quaternion rotAnimated, out var viewMatrix);
+
+                _viewProjection =
+                    viewMatrix *
+                    NumericsUtil.CreatePerspectiveReversedDepth(1f, aspectRatio, 0.1f);
+
+                GizmoDrawer.BeginGizmoDrawing("scene_gizmos", ImGui.GetWindowDrawList(), _viewProjection,
+                    new Rect(topLeft, topLeft + size), new CameraState(
+                        eyeAnimated,
+                        Vector3.Transform(-Vector3.UnitZ, rotAnimated),
+                        Vector3.Transform(Vector3.UnitX, rotAnimated),
+                        rotAnimated));
+
+                GizmoDrawer.TranslationGizmo(_transform, 80, out _);
+                GizmoDrawer.ClippedLine(new Vector3(0, 0, 0), new Vector3(0, 100, 0), 
+                    GizmoDrawer.GetAxisColor(1), 1.5f);
+
+                GizmoDrawer.OrientationCube(new Vector2(100, 100), 40, out _);
+
+                GizmoDrawer.EndGizmoDrawing();
             }
 
             if (!isRightDragging)
@@ -551,51 +619,6 @@ namespace SceneGL.Testing
                     DEGREES_TO_RADIANS * _transform_roll
                     ) *
                 Matrix4x4.CreateTranslation(_transform_pos);
-
-            
-
-            if (isSceneHovered || _isSceneHoveredBeforeDrag)
-            {
-                if (isRightDragging)
-                {
-                    Vector2 delta = mousePos - _previous_mousePos;
-
-                    Vector3 right = Vector3.Transform(Vector3.UnitX, _camera.Rotation);
-                    _camera.Rotation = Quaternion.CreateFromAxisAngle(right, -delta.Y * 0.002f) * _camera.Rotation;
-
-                    _camera.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, -delta.X * 0.002f) * _camera.Rotation;
-                }
-
-                float camMoveSpeed = (float)(0.4 * deltaSeconds * 60);
-
-                var keyboard = _input.Keyboards[0];
-
-                if (keyboard.IsKeyPressed(Key.W))
-                    _camera.Eye -= Vector3.Transform(Vector3.UnitZ * camMoveSpeed, _camera.Rotation);
-                if (keyboard.IsKeyPressed(Key.S))
-                    _camera.Eye += Vector3.Transform(Vector3.UnitZ * camMoveSpeed, _camera.Rotation);
-
-                if (keyboard.IsKeyPressed(Key.A))
-                    _camera.Eye -= Vector3.Transform(Vector3.UnitX * camMoveSpeed, _camera.Rotation);
-                if (keyboard.IsKeyPressed(Key.D))
-                    _camera.Eye += Vector3.Transform(Vector3.UnitX * camMoveSpeed, _camera.Rotation);
-
-                if (keyboard.IsKeyPressed(Key.Q))
-                    _camera.Eye -= Vector3.UnitY * camMoveSpeed;
-                if (keyboard.IsKeyPressed(Key.E))
-                    _camera.Eye += Vector3.UnitY * camMoveSpeed;
-            }
-
-
-            //_cam_rotation_smooth = Quaternion.Slerp(_cam_rotation_smooth, _cam_rotation, 0.2f);
-            //_cam_eye_smooth = Vector3.Lerp(_cam_eye_smooth, _cam_eye, 0.2f);
-
-            _camera.Animate(deltaSeconds, out var eyeAnimated, out var rotAnimated);
-
-            _viewProjection = 
-                Matrix4x4.CreateTranslation(-eyeAnimated) *
-                Matrix4x4.CreateFromQuaternion(Quaternion.Inverse(rotAnimated)) *
-                NumericsUtil.CreatePerspectiveReversedDepth(1f, aspectRatio, 0.1f);
 
             _sceneFB.Use(_gl);
             _gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
