@@ -26,7 +26,10 @@ namespace EditTK
         public Vector2 Size => BottomRight - TopLeft;
     }
 
-    public record struct CameraState(Vector3 Position, Vector3 ForwardVector, Vector3 RightVector, Quaternion Rotation);
+    public record struct CameraState(Vector3 Position, Vector3 ForwardVector, Vector3 UpVector, Quaternion Rotation)
+    {
+        public Vector3 RightVector => Vector3.Cross(ForwardVector, UpVector);
+    }
 
     /// <summary>
     /// Provides useful methods for evaluating the results of the Gizmo functions in <see cref="GizmoDrawer"/>

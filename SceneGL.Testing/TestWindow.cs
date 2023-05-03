@@ -24,12 +24,13 @@ namespace SceneGL.Testing
 {
     internal class TestWindow
     {
-        private static object _glLock = new object();
+        private static readonly object _glLock = new();
 
         private readonly IWindow _window;
         private GL? _gl;
         private IInputContext? _input;
         private ImGuiController? _imguiController;
+        private ITransformAction? _transformAction;
 
         private ShaderSource _vertexShaderSource = InfiniteGrid.VertexSource;
         private ShaderSource _fragmentShaderSource = InfiniteGrid.FragmentSource;
@@ -44,7 +45,6 @@ namespace SceneGL.Testing
         private float _transform_pitch = 0;
         private float _transform_roll = 0;
         private Vector3 _transform_scale = new Vector3(1f, 0.7f, 1);
-        private Vector2 _previous_mousePos = Vector2.Zero;
 
         private Camera _camera = new Camera(new Vector3(-10, 7, 10), Vector3.Zero);
 
@@ -132,7 +132,7 @@ namespace SceneGL.Testing
             //    _instanceData[i + 2] = new(Matrix4x4.CreateScale(0.5f) * Matrix4x4.CreateTranslation(2, 0, -z));
             //}
 
-            Random rng = new Random(0);
+            var rng = new Random(0);
 
             //for (int i = 0; i < 300000; i++)
             //{
@@ -201,6 +201,8 @@ namespace SceneGL.Testing
                     Color=new Vector3(0.5f, 1.0f, 1.0f) 
                 },
             };
+
+            _transform = Matrix4x4.CreateTranslation(0, 3, 0);
         }
 
         public void AddToWindowManager() => _window.AddToWindowManager();
@@ -270,7 +272,7 @@ namespace SceneGL.Testing
             {
                 if (ImGui.IsMouseDragging(ImGuiMouseButton.Right))
                 {
-                    Vector2 delta = ImGui.GetMousePos() - _previous_mousePos;
+                    Vector2 delta = ImGui.GetIO().MouseDelta;
 
                     Vector3 right = Vector3.Transform(Vector3.UnitX, camera.Rotation);
                     camera.Rotation = Quaternion.CreateFromAxisAngle(right, -delta.Y * 0.002f) * camera.Rotation;
@@ -319,7 +321,6 @@ namespace SceneGL.Testing
             _imguiController.MakeCurrent();
             
             var mousePos = ImGui.GetMousePos();
-            var pMousePos = _previous_mousePos;
 
             var viewport = ImGui.GetMainViewport();
 
@@ -413,20 +414,68 @@ namespace SceneGL.Testing
                 UpdateCamera(isSceneHovered || _isSceneHoveredBeforeDrag,
                     _camera, deltaSeconds, out Vector3 eyeAnimated, out Quaternion rotAnimated, out var viewMatrix);
 
+                float fov = 1;
+
                 _viewProjection =
                     viewMatrix *
-                    NumericsUtil.CreatePerspectiveReversedDepth(1f, aspectRatio, 0.1f);
+                    NumericsUtil.CreatePerspectiveReversedDepth(fov, aspectRatio, 0.1f);
 
-                GizmoDrawer.BeginGizmoDrawing("scene_gizmos", ImGui.GetWindowDrawList(), _viewProjection,
-                    new Rect(topLeft, topLeft + size), new CameraState(
+                CameraState cameraState = new(
                         eyeAnimated,
                         Vector3.Transform(-Vector3.UnitZ, rotAnimated),
-                        Vector3.Transform(Vector3.UnitX, rotAnimated),
-                        rotAnimated));
+                        Vector3.Transform(Vector3.UnitY, rotAnimated),
+                        rotAnimated);
 
-                GizmoDrawer.TranslationGizmo(_transform, 80, out _);
-                GizmoDrawer.ClippedLine(new Vector3(0, 0, 0), new Vector3(0, 100, 0), 
-                    GizmoDrawer.GetAxisColor(1), 1.5f);
+
+                float yScale = 1.0f / (float)Math.Tan(fov * 0.5f);
+                float xScale = yScale / aspectRatio;
+
+                Vector3 mouseRayDirection = Vector3.Transform(
+                    Vector3.Normalize(new(
+                        xScale * (mousePos.X / size.X * 2 - 1),
+                        yScale * (mousePos.Y / size.Y * 2 - 1),
+                        -1
+                    )) , rotAnimated);
+
+                GizmoDrawer.BeginGizmoDrawing("scene_gizmos", ImGui.GetWindowDrawList(), _viewProjection,
+                    new Rect(topLeft, topLeft + size), cameraState);
+
+                if (_transformAction != null)
+                {
+                    var actionRes = _transformAction.Update(in cameraState, in mouseRayDirection, ImGui.IsKeyDown(ImGuiKey.ModShift) ? 45 : null);
+
+                    _transform = _transformAction.FinalMatrix;
+
+                    if (actionRes == ActionUpdateResult.Apply)
+                    {
+                        _transform = _transformAction.FinalMatrix;
+                        _transformAction = null;
+                    }
+                    else if(actionRes == ActionUpdateResult.Cancel)
+                    {
+                        //just for demonstration purposes, this is NOT the correct way to do this
+                        Debug.Assert(Matrix4x4.Invert(_transformAction.DeltaMatrix, out var inv));
+                        _transform *= inv;
+
+                        _transformAction = null;
+                    }
+                }
+                else
+                {
+                    if (GizmoDrawer.RotationGizmo(_transform, 80, out var hoveredAxis) && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                    {
+                        if (GizmoResultHelper.IsSingleAxis(hoveredAxis, out int axis))
+                            _transformAction = AxisRotationAction.Start(axis,
+                                Vector3.Transform(new(), _transform), _transform, in cameraState, in mouseRayDirection);
+                        else if(hoveredAxis == HoveredAxis.VIEW_AXIS)
+                            _transformAction = AxisRotationAction.StartViewAxisRotation(
+                                Vector3.Transform(new(), _transform), _transform, in cameraState, in mouseRayDirection);
+                        else if(hoveredAxis == HoveredAxis.TRACKBALL)
+                            _transformAction = TrackballRotationAction.Start(
+                                Vector3.Transform(new(), _transform), _transform, in cameraState, in mouseRayDirection);
+                    }
+                }
+
 
                 GizmoDrawer.OrientationCube(new Vector2(100, 100), 40, out _);
 
@@ -609,16 +658,15 @@ namespace SceneGL.Testing
 
 
 
-            const float DEGREES_TO_RADIANS = MathF.PI / 180f;
 
-            _transform =
-                Matrix4x4.CreateScale(_transform_scale) *
-                Matrix4x4.CreateFromYawPitchRoll(
-                    DEGREES_TO_RADIANS * _transform_yaw,
-                    DEGREES_TO_RADIANS * _transform_pitch,
-                    DEGREES_TO_RADIANS * _transform_roll
-                    ) *
-                Matrix4x4.CreateTranslation(_transform_pos);
+            //_transform =
+            //    Matrix4x4.CreateScale(_transform_scale) *
+            //    Matrix4x4.CreateFromYawPitchRoll(
+            //        DEGREES_TO_RADIANS * _transform_yaw,
+            //        DEGREES_TO_RADIANS * _transform_pitch,
+            //        DEGREES_TO_RADIANS * _transform_roll
+            //        ) *
+            //    Matrix4x4.CreateTranslation(_transform_pos);
 
             _sceneFB.Use(_gl);
             _gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
@@ -632,7 +680,7 @@ namespace SceneGL.Testing
                 Gizmos.Render(_gl, _camera.Rotation, in _viewProjection, CollectionsMarshal.AsSpan(_gizmoPositions));
             }
 
-            //ColoredTriangle.Render(_gl, ref _color, in _transform, in _viewProjection);
+            ColoredTriangle.Render(_gl, ref _color, in _transform, in _viewProjection);
 
             Matrix4x4 identity = Matrix4x4.Identity;
 
@@ -643,8 +691,6 @@ namespace SceneGL.Testing
             _gl.Clear(ClearBufferMask.ColorBufferBit);
             _gl.Viewport(_window.FramebufferSize);
             _imguiController.Render();
-
-            _previous_mousePos = mousePos;
         }
     }
 }
