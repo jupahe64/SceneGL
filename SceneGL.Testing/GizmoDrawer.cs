@@ -155,7 +155,7 @@ namespace EditTK
             return true;
         }
 
-        private static Vector3 IntersectPoint(Vector3 rayVector, Vector3 rayPoint, Vector3 planeNormal, Vector3 planePoint)
+        public static Vector3 IntersectPoint(Vector3 rayVector, Vector3 rayPoint, Vector3 planeNormal, Vector3 planePoint)
         {
             //code from: https://rosettacode.org/wiki/Find_the_intersection_of_a_line_with_a_plane
             var diff = rayPoint - planePoint;
@@ -209,7 +209,7 @@ namespace EditTK
         };
         private static IntPtr s_orientationCubeTexture;
 
-        private static uint AlphaBlend(uint colA, uint colB)
+        public static uint AlphaBlend(uint colA, uint colB)
         {
             float blend = (colB >> 24 & 0xFF) / 255f;
 
@@ -226,7 +226,7 @@ namespace EditTK
                 a << 24;
         }
 
-        private static uint AdditiveBlend(uint colA, uint colB)
+        public static uint AdditiveBlend(uint colA, uint colB)
         {
             uint r = Math.Min((colA >> 0 & 0xFF) + (colB >> 0 & 0xFF), 255);
             uint g = Math.Min((colA >> 8 & 0xFF) + (colB >> 8 & 0xFF), 255);
@@ -515,6 +515,9 @@ namespace EditTK
             return HoverablePart(snappedHitPos != Vector3.Zero);
         }
 
+        public static float Get3dGizmoScaling(Vector3 gizmoPosition, float gizmoSize2d)
+            => gizmoSize2d / (WorldToScreen(gizmoPosition + s_cam.RightVector) - WorldToScreen(gizmoPosition)).X;
+
 
         /// <summary>
         /// Draws/Handles a Rotation Transform-Gizmo as seen in Blender, Unity, Maya etc.
@@ -541,9 +544,7 @@ namespace EditTK
             Vector3 center = transformMatrix.Translation;
             Vector2 center2d = WorldToScreen(center);
 
-            Vector3 camLookDir = s_cam.ForwardVector;
-
-            float gizmoScaleFactor = 1 / (WorldToScreen(center + s_cam.RightVector) - WorldToScreen(center)).X;
+            float gizmoScaleFactor = Get3dGizmoScaling(center, 1);
 
             bool AxisGimbal(int axis)
             {
@@ -614,6 +615,9 @@ namespace EditTK
             if (HoverablePart(distanceMouseToCenter2d < radius))
                 hoveredAxis = HoveredAxis.TRACKBALL;
 
+            if (hoveredAxis == HoveredAxis.TRACKBALL)
+                Drawlist.AddCircleFilled(center2d, radius, 0x33_FF_FF_FF, 32);
+
             if (AxisGimbal(0))
                 hoveredAxis = HoveredAxis.X_AXIS;
             if (AxisGimbal(1))
@@ -623,17 +627,9 @@ namespace EditTK
 
             float camVecGimbalRadius = radius + 10;
 
+
             if (HoverablePart(Math.Abs(distanceMouseToCenter2d - camVecGimbalRadius) < 5))
-            {
                 hoveredAxis = HoveredAxis.VIEW_AXIS;
-                s_transformMatVectors[3] = camLookDir;
-            }
-
-            if (hoveredAxis == HoveredAxis.TRACKBALL)
-                Drawlist.AddCircleFilled(center2d, radius, 0x33_FF_FF_FF, 32);
-
-
-
 
             Drawlist.AddCircle(center2d, camVecGimbalRadius - 1.5f, hoveredAxis == HoveredAxis.VIEW_AXIS ? 0x88_FF_FF_FF : 0x55_FF_FF_FF, 32, 1.5f);
             Drawlist.AddCircle(center2d, camVecGimbalRadius + 1.5f, hoveredAxis == HoveredAxis.VIEW_AXIS ? 0x88_FF_FF_FF : 0x55_FF_FF_FF, 32, 1.5f);
@@ -836,6 +832,16 @@ namespace EditTK
                 hoveredAxis = HoveredAxis.Y_AXIS;
             if (GizmoAxisHandle(center, center2d, mousePos, lineLength, gizmoScaleFactor, 2, true))
                 hoveredAxis = HoveredAxis.Z_AXIS;
+
+            float radius = 5;
+
+            float distanceMouseToCenter2d = Vector2.Distance(center2d, mousePos);
+
+            if (HoverablePart(distanceMouseToCenter2d < radius + 5))
+                hoveredAxis = HoveredAxis.FREE;
+
+            var col = hoveredAxis == HoveredAxis.FREE ? HOVER_COLOR : 0xFF_FF_FF_FF;
+            Drawlist.AddCircleFilled(center2d, radius, col, 32);
 
             return hoveredAxis != HoveredAxis.NONE;
         }

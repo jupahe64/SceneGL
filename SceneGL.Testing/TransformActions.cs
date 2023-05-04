@@ -23,10 +23,8 @@ namespace EditTK
         protected readonly Vector3 _center;
 
         public Matrix4x4 FinalMatrix { get; private set; }
-        public Matrix4x4 SmoothFinalMatrix { get; private set; }
 
         public Matrix4x4 DeltaMatrix { get; protected set; }
-        public Matrix4x4 SmoothDeltaMatrix { get; protected set; }
 
         public TransformAction(Matrix4x4 baseMatrix, Vector3 center)
         {
@@ -36,7 +34,7 @@ namespace EditTK
 
         protected abstract void OnStart(in CameraState camera, in Vector3 mouseRayDirection);
 
-        protected abstract void OnUpdate(in CameraState camera, in Vector3 mouseRayDirection, float? snappingInterval);
+        protected abstract void OnUpdate(in CameraState camera, in Vector3 mouseRayDirection, bool isSnapping);
 
 
         public void StartTransform(in CameraState camera, in Vector3 mouseRayDirection)
@@ -44,7 +42,7 @@ namespace EditTK
             OnStart(camera, in mouseRayDirection);
         }
 
-        public ActionUpdateResult Update(in CameraState camera, in Vector3 mouseRayDirection, float? snappingInterval)
+        public ActionUpdateResult Update(in CameraState camera, in Vector3 mouseRayDirection, bool isSnapping)
         {
             if (ImGui.IsMouseDown(ImGuiMouseButton.Right))
             {
@@ -53,16 +51,13 @@ namespace EditTK
                 return ActionUpdateResult.Cancel;
             }
 
-            OnUpdate(camera, in mouseRayDirection, snappingInterval);
+            OnUpdate(camera, in mouseRayDirection, isSnapping);
 
             var moveCenterToOrigin = Matrix4x4.CreateTranslation(_center);
             var moveBack = Matrix4x4.CreateTranslation(-_center);
 
             DeltaMatrix = moveBack * DeltaMatrix * moveCenterToOrigin;
-            SmoothDeltaMatrix = moveBack * SmoothDeltaMatrix * moveCenterToOrigin;
-
             FinalMatrix = _baseMatrix * DeltaMatrix;
-            SmoothFinalMatrix = _baseMatrix * SmoothDeltaMatrix;
 
             if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
                 return ActionUpdateResult.Apply;
@@ -90,9 +85,11 @@ namespace EditTK
 
         private readonly Vector3 _axisVector;
         private readonly AxisInfo _axisInfo;
-        private ValueTracker? _rotationTracker;
+        private ValueTracker<double>? _rotationTracker;
+        private double _snappingInterval;
 
-        public static AxisRotationAction Start(int axis, Vector3 center, Matrix4x4 baseMatrix, in CameraState camera, in Vector3 mouseRayDirection)
+        public static AxisRotationAction Start(int axis, Vector3 center, Matrix4x4 baseMatrix,
+            double snappingInterval, in CameraState camera, in Vector3 mouseRayDirection)
         {
             var mtx = baseMatrix;
             ReadOnlySpan<Vector3> axisVecs = stackalloc Vector3[]
@@ -101,38 +98,40 @@ namespace EditTK
                 new(mtx.M21, mtx.M22, mtx.M23),
                 new(mtx.M31, mtx.M32, mtx.M33),
             };
-            var action = new AxisRotationAction(center, axisVecs[axis], AxisInfo.Axes[axis], baseMatrix);
+            var action = new AxisRotationAction(center, axisVecs[axis], AxisInfo.Axes[axis], baseMatrix, snappingInterval);
             action.StartTransform(in camera, in mouseRayDirection);
             return action;
         }
 
-        public static AxisRotationAction StartViewAxisRotation(Vector3 center, Matrix4x4 baseMatrix, in CameraState camera, in Vector3 mouseRayDirection)
+        public static AxisRotationAction StartViewAxisRotation(Vector3 center, Matrix4x4 baseMatrix,
+            double snappingInterval, in CameraState camera, in Vector3 mouseRayDirection)
         {
-            var action = new AxisRotationAction(center, camera.ForwardVector, AxisInfo.ViewRotationAxis, baseMatrix);
+            var action = new AxisRotationAction(center, camera.ForwardVector, AxisInfo.ViewRotationAxis, baseMatrix, snappingInterval);
             action.StartTransform(in camera, in mouseRayDirection);
             return action;
         }
 
-        private AxisRotationAction(Vector3 center, Vector3 axisVector, AxisInfo axisInfo, Matrix4x4 baseMatrix)
+        private AxisRotationAction(Vector3 center, Vector3 axisVector, AxisInfo axisInfo, Matrix4x4 baseMatrix, double snappingInterval)
             : base(baseMatrix, center)
         {
             _axisVector = axisVector;
             _axisInfo = axisInfo;
+            _snappingInterval = snappingInterval;
         }
 
 
         protected override void OnStart(in CameraState camera, in Vector3 mouseRayDirection)
         {
-            _rotationTracker = new ValueTracker(GetAngle(camera));
+            _rotationTracker = new ValueTracker<double>(GetAngle(camera));
         }
 
-        protected override void OnUpdate(in CameraState camera, in Vector3 mouseRayDirection, float? snappingInterval)
+        protected override void OnUpdate(in CameraState camera, in Vector3 mouseRayDirection, bool isSnapping)
         {
             Debug.Assert(_rotationTracker != null);
             
             double inputAngle = GetAngle(camera);
             double newAngle = _rotationTracker.Value + GetShortestRotationBetween(_rotationTracker.Value, inputAngle, 360);
-            _rotationTracker.Update(newAngle, snappingInterval);
+            _rotationTracker.Update(newAngle, isSnapping ? _snappingInterval : null);
 
             Vector2 center2d = GizmoDrawer.WorldToScreen(_center);
 
@@ -151,7 +150,6 @@ namespace EditTK
 
 
             DeltaMatrix = Matrix4x4.CreateFromAxisAngle(_axisVector, (float)(_rotationTracker.DeltaValue * MathF.PI / 180f));
-            SmoothDeltaMatrix = Matrix4x4.CreateFromAxisAngle(_axisVector, (float)(_rotationTracker.SmoothDeltaValue * Math.PI / 180f));
         }
 
         private double GetAngle(in CameraState camera)
@@ -179,46 +177,48 @@ namespace EditTK
 
     public class TrackballRotationAction : TransformAction
     {
-        private ValueTracker? _rotationXTracker;
-        private ValueTracker? _rotationYTracker;
+        private ValueTracker<double>? _rotationXTracker;
+        private ValueTracker<double>? _rotationYTracker;
+        private double _snappingInterval;
 
-        public static TrackballRotationAction Start(Vector3 center, Matrix4x4 baseMatrix, in CameraState camera, in Vector3 mouseRayDirection)
+        public static TrackballRotationAction Start(Vector3 center, Matrix4x4 baseMatrix,
+            double snappingInterval, in CameraState camera, in Vector3 mouseRayDirection)
         {
-            var action = new TrackballRotationAction(center, baseMatrix);
+            var action = new TrackballRotationAction(center, baseMatrix, snappingInterval);
             action.StartTransform(in camera, in mouseRayDirection);
             return action;
         }
 
-        public TrackballRotationAction(Vector3 center, Matrix4x4 baseMatrix)
+        public TrackballRotationAction(Vector3 center, Matrix4x4 baseMatrix, double snappingInterval)
             : base(baseMatrix, center)
         {
-
+            _snappingInterval = snappingInterval;
         }
 
         protected override void OnStart(in CameraState camera, in Vector3 mouseRayDirection)
         {
             (double angleX, double angleY) = GetAngles();
 
-            _rotationXTracker = new ValueTracker(angleX);
-            _rotationYTracker = new ValueTracker(angleY);
+            _rotationXTracker = new ValueTracker<double>(angleX);
+            _rotationYTracker = new ValueTracker<double>(angleY);
         }
 
-        protected override void OnUpdate(in CameraState camera, in Vector3 mouseRayDirection, float? snappingInterval)
+        protected override void OnUpdate(in CameraState camera, in Vector3 mouseRayDirection, bool isSnapping)
         {
             if (_rotationXTracker == null || _rotationYTracker == null)
                 throw new NullReferenceException($"Important instance variables are null, {nameof(ITransformAction.StartTransform)} has not been called");
 
             (double angleX, double angleY) = GetAngles();
 
-            _rotationXTracker.Update(angleX, snappingInterval);
-            _rotationYTracker.Update(angleY, snappingInterval);
+            _rotationXTracker.Update(angleX, isSnapping ? _snappingInterval : null);
+            _rotationYTracker.Update(angleY, isSnapping ? _snappingInterval : null);
 
             Vector2 center2d = GizmoDrawer.WorldToScreen(_center);
 
-            //GizmoDrawer.Drawlist.AddText(
-            //    ImGui.GetFont(), 18,
-            //    center2d + new Vector2(RotationGizmo.GIMBAL_SIZE * 2, -RotationGizmo.GIMBAL_SIZE * 0.5f), AxisInfo.ViewRotationAxis.Color,
-            //    $"Rotaing along Trackball : {-_rotationXTracker.DeltaValue,5:0.#}° {-_rotationYTracker.DeltaValue,5:0.#}°");
+            GizmoDrawer.Drawlist.AddText(
+                ImGui.GetFont(), 18,
+                center2d, AxisInfo.ViewRotationAxis.Color,
+                $"Rotaing along Trackball : {-_rotationXTracker.DeltaValue,5:0.#}° {-_rotationYTracker.DeltaValue,5:0.#}°");
 
             DeltaMatrix = Matrix4x4.CreateFromAxisAngle(camera.UpVector, (float)(_rotationXTracker.DeltaValue * MathF.PI / 180f));
             DeltaMatrix *= Matrix4x4.CreateFromAxisAngle(camera.RightVector, (float)(_rotationYTracker.DeltaValue * MathF.PI / 180f));
@@ -236,6 +236,260 @@ namespace EditTK
     }
 
 
+    public class AxisTranslateAction : TransformAction
+    {
+        private readonly Vector3 _axisVector;
+        private readonly AxisInfo _axisInfo;
+        private ValueTracker<float>? _offsetTracker;
+        private float _snappingInterval;
+
+        public static AxisTranslateAction Start(int axis, Vector3 center, Matrix4x4 baseMatrix,
+            float snappingInterval, in CameraState camera, in Vector3 mouseRayDirection)
+        {
+            var mtx = baseMatrix;
+            ReadOnlySpan<Vector3> axisVecs = stackalloc Vector3[]
+            {
+                new(mtx.M11, mtx.M12, mtx.M13),
+                new(mtx.M21, mtx.M22, mtx.M23),
+                new(mtx.M31, mtx.M32, mtx.M33),
+            };
+            var action = new AxisTranslateAction(center, axisVecs[axis], AxisInfo.Axes[axis], baseMatrix, snappingInterval);
+            action.StartTransform(in camera, in mouseRayDirection);
+            return action;
+        }
+
+        private AxisTranslateAction(Vector3 center, Vector3 axisVector, AxisInfo axisInfo, Matrix4x4 baseMatrix, float snappingInterval)
+            : base(baseMatrix, center)
+        {
+            _axisVector = axisVector;
+            _axisInfo = axisInfo;
+            _snappingInterval = snappingInterval;
+        }
+
+
+        protected override void OnStart(in CameraState camera, in Vector3 mouseRayDirection)
+        {
+            _offsetTracker = new ValueTracker<float>(GetOffset(in camera, in mouseRayDirection));
+        }
+
+        protected override void OnUpdate(in CameraState camera, in Vector3 mouseRayDirection, bool isSnapping)
+        {
+            Debug.Assert(_offsetTracker != null);
+
+            float newOffset = GetOffset(in camera, in mouseRayDirection);
+            _offsetTracker.Update(newOffset, isSnapping ? _snappingInterval : null);
+
+            Vector2 center2d = GizmoDrawer.WorldToScreen(_center);
+
+            GizmoDrawer.Drawlist.AddText(
+                ImGui.GetFont(), 18,
+                center2d, _axisInfo.Color,
+                $"Moving along {_axisInfo.Name} : {_offsetTracker.DeltaValue,5:0.###}m");
+
+            if (_axisInfo != AxisInfo.ViewRotationAxis)
+            {
+                GizmoDrawer.ClippedLine(_center, _center + _axisVector * 1000, _axisInfo.Color, 1.5f);
+                GizmoDrawer.ClippedLine(_center, _center - _axisVector * 1000, _axisInfo.Color & 0xAA_FF_FF_FF, 1.5f);
+            }
+
+            GizmoDrawer.Drawlist.AddCircleFilled(center2d, 3, _axisInfo.Color);
+
+
+            DeltaMatrix = Matrix4x4.CreateTranslation(_axisVector * _offsetTracker.DeltaValue);
+        }
+
+        private float GetOffset(in CameraState camera, in Vector3 mouseRayDirection)
+        {
+            var billBoardVec = Vector3.Cross(
+                Vector3.Cross(camera.ForwardVector, _axisVector),
+                _axisVector
+            );
+
+            Vector3 hitPoint = GizmoDrawer.IntersectPoint(mouseRayDirection, camera.Position, billBoardVec, _center);
+            Vector3 offset = hitPoint - _center;
+            return Vector3.Dot( offset, _axisVector );
+        }
+    }
+
+    public class PlaneTranslateAction : TransformAction
+    {
+        private readonly Vector3 _axisVectorA;
+        private readonly Vector3 _axisVectorB;
+        private readonly Vector3 _planeNormal;
+        private readonly AxisInfo _axisInfoA;
+        private readonly AxisInfo _axisInfoB;
+        private ValueTracker<float>? _offsetTrackerAxisA;
+        private ValueTracker<float>? _offsetTrackerAxisB;
+        private float _snappingInterval;
+
+        public static PlaneTranslateAction Start(int axisA, int axisB, Vector3 center, Matrix4x4 baseMatrix,
+            float snappingInterval, in CameraState camera, in Vector3 mouseRayDirection)
+        {
+            var mtx = baseMatrix;
+            ReadOnlySpan<Vector3> axisVecs = stackalloc Vector3[]
+            {
+                new(mtx.M11, mtx.M12, mtx.M13),
+                new(mtx.M21, mtx.M22, mtx.M23),
+                new(mtx.M31, mtx.M32, mtx.M33),
+            };
+            var action = new PlaneTranslateAction(center, axisVecs[axisA], axisVecs[axisB], AxisInfo.Axes[axisA], AxisInfo.Axes[axisB], baseMatrix, snappingInterval);
+            action.StartTransform(in camera, in mouseRayDirection);
+            return action;
+        }
+
+        private PlaneTranslateAction(Vector3 center, Vector3 axisVectorA, Vector3 axisVectorB, AxisInfo axisInfoA, AxisInfo axisInfoB, 
+            Matrix4x4 baseMatrix, float snappingInterval)
+            : base(baseMatrix, center)
+        {
+            _axisVectorA = axisVectorA;
+            _axisVectorB = axisVectorB;
+            _planeNormal = Vector3.Cross(axisVectorA, axisVectorB);
+            _axisInfoA = axisInfoA;
+            _axisInfoB = axisInfoB;
+            _snappingInterval = snappingInterval;
+        }
+
+
+        protected override void OnStart(in CameraState camera, in Vector3 mouseRayDirection)
+        {
+            var (a, b) = GetOffsets(in camera, in mouseRayDirection);
+
+            _offsetTrackerAxisA = new ValueTracker<float>(a);
+            _offsetTrackerAxisB = new ValueTracker<float>(b);
+        }
+
+        protected override void OnUpdate(in CameraState camera, in Vector3 mouseRayDirection, bool isSnapping)
+        {
+            Debug.Assert(_offsetTrackerAxisA != null);
+            Debug.Assert(_offsetTrackerAxisB != null);
+
+            var (newOffsetA, newOffsetB) = GetOffsets(in camera, in mouseRayDirection);
+
+            _offsetTrackerAxisA.Update(newOffsetA, isSnapping ? _snappingInterval : null);
+            _offsetTrackerAxisB.Update(newOffsetB, isSnapping ? _snappingInterval : null);
+
+            Vector2 center2d = GizmoDrawer.WorldToScreen(_center);
+
+            uint planeColor = GizmoDrawer.AdditiveBlend(_axisInfoA.Color, _axisInfoB.Color);
+
+            GizmoDrawer.Drawlist.AddText(
+                ImGui.GetFont(), 18,
+                center2d, planeColor,
+                $"Moving along {_axisInfoA.Name} : {_offsetTrackerAxisA.DeltaValue,5:0.###}m\n" +
+                $"             {_axisInfoB.Name} : {_offsetTrackerAxisB.DeltaValue,5:0.###}m");
+
+            GizmoDrawer.ClippedLine(_center, _center + _axisVectorA * 1000, _axisInfoA.Color, 1.5f);
+            GizmoDrawer.ClippedLine(_center, _center - _axisVectorA * 1000, _axisInfoA.Color & 0xAA_FF_FF_FF, 1.5f);
+
+            GizmoDrawer.ClippedLine(_center, _center + _axisVectorB * 1000, _axisInfoB.Color, 1.5f);
+            GizmoDrawer.ClippedLine(_center, _center - _axisVectorB * 1000, _axisInfoB.Color & 0xAA_FF_FF_FF, 1.5f);
+
+            GizmoDrawer.Drawlist.AddCircleFilled(center2d, 3, planeColor);
+
+
+            DeltaMatrix = Matrix4x4.CreateTranslation(
+                _axisVectorA * _offsetTrackerAxisA.DeltaValue +
+                _axisVectorB * _offsetTrackerAxisB.DeltaValue
+            );
+        }
+
+        private (float a, float b) GetOffsets(in CameraState camera, in Vector3 mouseRayDirection)
+        {
+            Vector3 hitPoint = GizmoDrawer.IntersectPoint(mouseRayDirection, camera.Position, _planeNormal, _center);
+            Vector3 offset = hitPoint - _center;
+            return (Vector3.Dot(offset, _axisVectorA), Vector3.Dot(offset, _axisVectorB));
+        }
+    }
+
+    public class FreeTranslateAction : TransformAction
+    {
+        private readonly Vector3 _axisVectorX;
+        private readonly Vector3 _axisVectorY;
+        private readonly Vector3 _axisVectorZ;
+        private ValueTracker<float>? _offsetTrackerX;
+        private ValueTracker<float>? _offsetTrackerY;
+        private ValueTracker<float>? _offsetTrackerZ;
+        private float _snappingInterval;
+
+        public FreeTranslateAction(
+            Vector3 center,
+            Vector3 axisVectorX, Vector3 axisVectorY, Vector3 axisVectorZ,
+            Matrix4x4 baseMatrix, float snappingInterval)
+            : base(baseMatrix, center)
+        {
+            _axisVectorX = axisVectorX;
+            _axisVectorY = axisVectorY;
+            _axisVectorZ = axisVectorZ;
+            _snappingInterval = snappingInterval;
+        }
+
+        public static FreeTranslateAction Start(Vector3 center, Matrix4x4 baseMatrix,
+            float snappingInterval, in CameraState camera, in Vector3 mouseRayDirection)
+        {
+            var mtx = baseMatrix;
+            ReadOnlySpan<Vector3> axisVecs = stackalloc Vector3[]
+            {
+                new(mtx.M11, mtx.M12, mtx.M13),
+                new(mtx.M21, mtx.M22, mtx.M23),
+                new(mtx.M31, mtx.M32, mtx.M33),
+            };
+            var action = new FreeTranslateAction(center,
+                axisVecs[0], axisVecs[1], axisVecs[2],
+                baseMatrix, snappingInterval);
+            action.StartTransform(in camera, in mouseRayDirection);
+            return action;
+        }
+
+
+        protected override void OnStart(in CameraState camera, in Vector3 mouseRayDirection)
+        {
+            var offset = GetOffset(in camera, in mouseRayDirection);
+
+            _offsetTrackerX = new ValueTracker<float>(offset.X);
+            _offsetTrackerY = new ValueTracker<float>(offset.Y);
+            _offsetTrackerZ = new ValueTracker<float>(offset.Z);
+        }
+
+        protected override void OnUpdate(in CameraState camera, in Vector3 mouseRayDirection, bool isSnapping)
+        {
+            Debug.Assert(_offsetTrackerX != null);
+            Debug.Assert(_offsetTrackerY != null);
+            Debug.Assert(_offsetTrackerZ != null);
+
+            var newOffset = GetOffset(in camera, in mouseRayDirection);
+
+            _offsetTrackerX.Update(newOffset.X, isSnapping ? _snappingInterval : null);
+            _offsetTrackerY.Update(newOffset.Y, isSnapping ? _snappingInterval : null);
+            _offsetTrackerZ.Update(newOffset.Z, isSnapping ? _snappingInterval : null);
+
+            Vector2 center2d = GizmoDrawer.WorldToScreen(_center);
+
+            GizmoDrawer.Drawlist.AddText(
+                ImGui.GetFont(), 18,
+                center2d, 0xFF_FF_FF_FF,
+                $"Moving along {AxisInfo.Axis0.Name} : {_offsetTrackerX.DeltaValue,5:0.###}m\n" +
+                $"             {AxisInfo.Axis1.Name} : {_offsetTrackerY.DeltaValue,5:0.###}m\n" +
+                $"             {AxisInfo.Axis2.Name} : {_offsetTrackerZ.DeltaValue,5:0.###}m");
+
+
+            GizmoDrawer.Drawlist.AddCircleFilled(center2d, 3, 0xFF_FF_FF_FF);
+
+
+            DeltaMatrix = Matrix4x4.CreateTranslation(
+                _axisVectorX * _offsetTrackerX.DeltaValue +
+                _axisVectorY * _offsetTrackerY.DeltaValue +
+                _axisVectorZ * _offsetTrackerZ.DeltaValue
+            );
+        }
+
+        private Vector3 GetOffset(in CameraState camera, in Vector3 mouseRayDirection)
+        {
+            Vector3 hitPoint = GizmoDrawer.IntersectPoint(mouseRayDirection, camera.Position, camera.ForwardVector, _center);
+            Vector3 offset = hitPoint - _center;
+            return offset;
+        }
+    }
+
 
     public interface ITransformAction
     {
@@ -243,40 +497,39 @@ namespace EditTK
         public Matrix4x4 DeltaMatrix { get; }
 
         public void StartTransform(in CameraState camera, in Vector3 mouseRayDirection);
-        public ActionUpdateResult Update(in CameraState camera, in Vector3 mouseRayDirection, float? snappingInterval);
+        public ActionUpdateResult Update(in CameraState camera, in Vector3 mouseRayDirection, bool isSnapping);
     }
 
-    public class ValueTracker
+    public class ValueTracker<TNumber>
+        where TNumber : struct, IFloatingPoint<TNumber>
     {
-        public double StartValue { get; private set; }
-        public double DeltaValue { get; private set; }
-        public double SmoothDeltaValue { get; private set; }
+        public TNumber StartValue { get; private set; }
+        public TNumber DeltaValue { get; private set; }
 
-        public double Value => StartValue + DeltaValue;
-        public double SmoothValue => StartValue + SmoothDeltaValue;
+        public TNumber Value => StartValue + DeltaValue;
 
-        public ValueTracker(double startValue)
+        public ValueTracker(TNumber startValue)
         {
             StartValue = startValue;
+            DeltaValue = TNumber.Zero;
 
-            if (StartValue == -0)
-                StartValue = 0;
+            if (StartValue == -TNumber.Zero)
+                StartValue = TNumber.Zero; //ensure that we never get -0
         }
 
-        public void Update(double newValue, float? snappingInterval)
+        public void Update(TNumber newValue, TNumber? snappingInterval)
         {
             DeltaValue = newValue - StartValue;
 
             if (snappingInterval is not null)
             {
-                var snapping = snappingInterval.Value;
-                DeltaValue = Math.Round(DeltaValue / snapping) * snapping;
+                TNumber snapping = snappingInterval.Value;
+                DeltaValue = TNumber.Round(DeltaValue / snapping) * snapping;
             }
 
-            if (DeltaValue == -0)
-                DeltaValue = 0; //ensure that we never get -0
+            if (DeltaValue == -TNumber.Zero)
+                DeltaValue = TNumber.Zero; //ensure that we never get -0
         }
-
     }
 
     public class AxisInfo

@@ -430,10 +430,12 @@ namespace SceneGL.Testing
                 float yScale = 1.0f / (float)Math.Tan(fov * 0.5f);
                 float xScale = yScale / aspectRatio;
 
+                Vector2 ndcMousePos = ((mousePos-topLeft) / size * 2 - Vector2.One) * new Vector2(1, -1);
+
                 Vector3 mouseRayDirection = Vector3.Transform(
                     Vector3.Normalize(new(
-                        xScale * (mousePos.X / size.X * 2 - 1),
-                        yScale * (mousePos.Y / size.Y * 2 - 1),
+                        ndcMousePos.X / xScale,
+                        ndcMousePos.Y / yScale,
                         -1
                     )) , rotAnimated);
 
@@ -442,7 +444,7 @@ namespace SceneGL.Testing
 
                 if (_transformAction != null)
                 {
-                    var actionRes = _transformAction.Update(in cameraState, in mouseRayDirection, ImGui.IsKeyDown(ImGuiKey.ModShift) ? 45 : null);
+                    var actionRes = _transformAction.Update(in cameraState, in mouseRayDirection, ImGui.IsKeyDown(ImGuiKey.ModShift));
 
                     _transform = _transformAction.FinalMatrix;
 
@@ -462,17 +464,44 @@ namespace SceneGL.Testing
                 }
                 else
                 {
-                    if (GizmoDrawer.RotationGizmo(_transform, 80, out var hoveredAxis) && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                    //if (GizmoDrawer.RotationGizmo(_transform, 80, out var hoveredAxis) && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                    //{
+                    //    const double AngleSnapping = 45;
+
+                    //    if (GizmoResultHelper.IsSingleAxis(hoveredAxis, out int axis))
+                    //        _transformAction = AxisRotationAction.Start(axis,
+                    //            Vector3.Transform(new(), _transform), _transform, AngleSnapping, 
+                    //            in cameraState, in mouseRayDirection);
+
+                    //    else if(hoveredAxis == HoveredAxis.VIEW_AXIS)
+                    //        _transformAction = AxisRotationAction.StartViewAxisRotation(
+                    //            Vector3.Transform(new(), _transform), _transform, AngleSnapping, 
+                    //            in cameraState, in mouseRayDirection);
+
+                    //    else if(hoveredAxis == HoveredAxis.TRACKBALL)
+                    //        _transformAction = TrackballRotationAction.Start(
+                    //            Vector3.Transform(new(), _transform), _transform, AngleSnapping, 
+                    //            in cameraState, in mouseRayDirection);
+                    //}
+
+                    if (GizmoDrawer.TranslationGizmo(_transform, 80, out var hoveredAxis) && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
                     {
+                        const float UnitSnapping = 0.5f;
+
                         if (GizmoResultHelper.IsSingleAxis(hoveredAxis, out int axis))
-                            _transformAction = AxisRotationAction.Start(axis,
-                                Vector3.Transform(new(), _transform), _transform, in cameraState, in mouseRayDirection);
-                        else if(hoveredAxis == HoveredAxis.VIEW_AXIS)
-                            _transformAction = AxisRotationAction.StartViewAxisRotation(
-                                Vector3.Transform(new(), _transform), _transform, in cameraState, in mouseRayDirection);
-                        else if(hoveredAxis == HoveredAxis.TRACKBALL)
-                            _transformAction = TrackballRotationAction.Start(
-                                Vector3.Transform(new(), _transform), _transform, in cameraState, in mouseRayDirection);
+                            _transformAction = AxisTranslateAction.Start(axis,
+                                Vector3.Transform(new(), _transform), _transform, UnitSnapping,
+                                in cameraState, in mouseRayDirection);
+
+                        else if (GizmoResultHelper.IsPlane(hoveredAxis, out int axisA, out int axisB))
+                            _transformAction = PlaneTranslateAction.Start(axisA, axisB,
+                                Vector3.Transform(new(), _transform), _transform, UnitSnapping,
+                                in cameraState, in mouseRayDirection);
+
+                        else if (hoveredAxis == HoveredAxis.FREE)
+                            _transformAction = FreeTranslateAction.Start(
+                                Vector3.Transform(new(), _transform), _transform, UnitSnapping,
+                                in cameraState, in mouseRayDirection);
                     }
                 }
 
@@ -543,6 +572,7 @@ namespace SceneGL.Testing
 
                 ImGui.SetNextItemWidth(150);
                 ImGui.DragFloat("Yaw", ref _transform_yaw);
+                ImGui.SetKeyboardFocusHere();
                 ImGui.SetNextItemWidth(150);
                 ImGui.DragFloat("Pitch", ref _transform_pitch);
                 ImGui.SetNextItemWidth(150);
