@@ -155,14 +155,14 @@ namespace EditTK
 
         private double GetAngle(in SceneViewState view)
         {
-            Vector2 relativeMousePos = ImGui.GetMousePos() - GizmoDrawer.WorldToScreen(_center);
+            Vector2 relativeMousePos = view.MousePosition - view.WorldToScreen(_center);
             Vector3 centerToCamDir = Vector3.Normalize(view.CamPosition - _center);
             float axisCamDot = Vector3.Dot(centerToCamDir, _axisVector);
 
             if (Math.Abs(axisCamDot) < 0.5f)
             {
                 Vector3 lineDir = Vector3.Normalize(Vector3.Cross(_axisVector, centerToCamDir));
-                Vector2 lineDir2d = Vector2.Normalize(GizmoDrawer.WorldToScreen(_center + lineDir) - GizmoDrawer.WorldToScreen(_center));
+                Vector2 lineDir2d = Vector2.Normalize(view.WorldToScreen(_center + lineDir) - view.WorldToScreen(_center));
 
                 float a = Vector2.Dot(lineDir2d, relativeMousePos) / 100f;
                 return Math.Pow(Math.Abs(a), 0.9) * Math.Sign(a) * 180;
@@ -198,7 +198,7 @@ namespace EditTK
 
         protected override void OnStart(in SceneViewState view)
         {
-            (double angleX, double angleY) = GetAngles();
+            (double angleX, double angleY) = GetAngles(in view);
 
             _rotationXTracker = new ValueTracker<double>(angleX);
             _rotationYTracker = new ValueTracker<double>(angleY);
@@ -209,7 +209,7 @@ namespace EditTK
             if (_rotationXTracker == null || _rotationYTracker == null)
                 throw new NullReferenceException($"Important instance variables are null, {nameof(ITransformAction.StartTransform)} has not been called");
 
-            (double angleX, double angleY) = GetAngles();
+            (double angleX, double angleY) = GetAngles(in view);
 
             _rotationXTracker.Update(angleX, isSnapping ? _snappingInterval : null);
             _rotationYTracker.Update(angleY, isSnapping ? _snappingInterval : null);
@@ -225,9 +225,9 @@ namespace EditTK
             DeltaMatrix *= Matrix4x4.CreateFromAxisAngle(view.CamRightVector, (float)(_rotationYTracker.DeltaValue * MathF.PI / 180f));
         }
 
-        private (double angleX, double angleY) GetAngles()
+        private (double angleX, double angleY) GetAngles(in SceneViewState view)
         {
-            Vector2 relativeMousePos = ImGui.GetMousePos() - GizmoDrawer.WorldToScreen(_center);
+            Vector2 relativeMousePos = view.MousePosition - view.WorldToScreen(_center);
 
             return (
                 relativeMousePos.X,
