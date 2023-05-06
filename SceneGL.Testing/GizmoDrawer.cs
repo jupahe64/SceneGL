@@ -5,6 +5,56 @@ using System.Runtime.InteropServices;
 
 namespace EditTK
 {
+    public static class MathHelper
+    {
+        public static bool IsPointInTriangle(Vector2 p, Vector2 a, Vector2 b, Vector2 c)
+        {
+            float AP_x = p.X - a.X;
+            float AP_y = p.Y - a.Y;
+
+            float CP_x = p.X - b.X;
+            float CP_y = p.Y - b.Y;
+
+            bool s_ab = (b.X - a.X) * AP_y - (b.Y - a.Y) * AP_x > 0.0;
+
+            if (/*s_ac*/   (c.X - a.X) * AP_y - (c.Y - a.Y) * AP_x > 0.0 == s_ab) return false;
+
+            if (/*s_cb*/   (c.X - b.X) * CP_y - (c.Y - b.Y) * CP_x > 0.0 != s_ab) return false;
+
+            return true;
+        }
+
+
+        public static bool IsPointInQuad(Vector2 p, Vector2 a, Vector2 b, Vector2 c, Vector2 d)
+        {
+            float AP_x = p.X - a.X;
+            float AP_y = p.Y - a.Y;
+
+            float CP_x = p.X - c.X;
+            float CP_y = p.Y - c.Y;
+
+            bool s_ab = (b.X - a.X) * AP_y - (b.Y - a.Y) * AP_x > 0.0;
+
+            if (/*s_ad*/   (d.X - a.X) * AP_y - (d.Y - a.Y) * AP_x > 0.0 == s_ab) return false;
+
+            if (/*s_cb*/   (b.X - c.X) * CP_y - (b.Y - c.Y) * CP_x > 0.0 == s_ab) return false;
+
+            if (/*s_cd*/   (d.X - c.X) * CP_y - (d.Y - c.Y) * CP_x > 0.0 != s_ab) return false;
+
+            return true;
+        }
+
+        public static Vector3 IntersectPoint(Vector3 rayVector, Vector3 rayPoint, Vector3 planeNormal, Vector3 planePoint)
+        {
+            //code from: https://rosettacode.org/wiki/Find_the_intersection_of_a_line_with_a_plane
+            var diff = rayPoint - planePoint;
+            var prod1 = Vector3.Dot(diff, planeNormal);
+            var prod2 = Vector3.Dot(rayVector, planeNormal);
+            var prod3 = prod1 / prod2;
+            return rayPoint - rayVector * prod3;
+        }
+    }
+
     [Flags]
     public enum HoveredAxis
     {
@@ -29,6 +79,31 @@ namespace EditTK
     public record struct CameraState(Vector3 Position, Vector3 ForwardVector, Vector3 UpVector, Quaternion Rotation)
     {
         public Vector3 RightVector => Vector3.Cross(ForwardVector, UpVector);
+    }
+    public record struct SceneViewState(CameraState CameraState, Matrix4x4 ViewProjectionMatrix, Rect ViewportRect, 
+        Vector2 MousePosition, Vector3 MouseRayDirection)
+    {
+        public Vector2 WorldToScreen(Vector3 vec)
+        {
+            var vec4 = Vector4.Transform(new Vector4(vec, 1), ViewProjectionMatrix);
+
+            var vec2 = new Vector2(vec4.X, vec4.Y) / Math.Max(0, vec4.W);
+
+            vec2.Y *= -1;
+
+            vec2 += Vector2.One;
+
+            return ViewportRect.TopLeft + vec2 * ViewportRect.Size * 0.5f;
+        }
+
+        public Vector3 CamUpVector => CameraState.UpVector;
+        public Vector3 CamForwardVector => CameraState.ForwardVector;
+        public Vector3 CamRightVector => CameraState.RightVector;
+        public Vector3 CamPosition => CameraState.Position;
+        public Quaternion CamRotation => CameraState.Rotation;
+
+        public Vector3 MouseRayHitOnPlane(Vector3 planeNormal, Vector3 planeOrigin)
+            => MathHelper.IntersectPoint(MouseRayDirection, CamPosition, planeNormal, planeOrigin);
     }
 
     /// <summary>
@@ -118,55 +193,6 @@ namespace EditTK
         [DllImport("cimgui")]
         private static extern bool igItemHoverable(Rect bb, uint id);
 
-        private static bool IsPointInTriangle(Vector2 p, Vector2 a, Vector2 b, Vector2 c)
-        {
-            float AP_x = p.X - a.X;
-            float AP_y = p.Y - a.Y;
-
-            float CP_x = p.X - b.X;
-            float CP_y = p.Y - b.Y;
-
-            bool s_ab = (b.X - a.X) * AP_y - (b.Y - a.Y) * AP_x > 0.0;
-
-            if (/*s_ac*/   (c.X - a.X) * AP_y - (c.Y - a.Y) * AP_x > 0.0 == s_ab) return false;
-
-            if (/*s_cb*/   (c.X - b.X) * CP_y - (c.Y - b.Y) * CP_x > 0.0 != s_ab) return false;
-
-            return true;
-        }
-
-
-        private static bool IsPointInQuad(Vector2 p, Vector2 a, Vector2 b, Vector2 c, Vector2 d)
-        {
-            float AP_x = p.X - a.X;
-            float AP_y = p.Y - a.Y;
-
-            float CP_x = p.X - c.X;
-            float CP_y = p.Y - c.Y;
-
-            bool s_ab = (b.X - a.X) * AP_y - (b.Y - a.Y) * AP_x > 0.0;
-
-            if (/*s_ad*/   (d.X - a.X) * AP_y - (d.Y - a.Y) * AP_x > 0.0 == s_ab) return false;
-
-            if (/*s_cb*/   (b.X - c.X) * CP_y - (b.Y - c.Y) * CP_x > 0.0 == s_ab) return false;
-
-            if (/*s_cd*/   (d.X - c.X) * CP_y - (d.Y - c.Y) * CP_x > 0.0 != s_ab) return false;
-
-            return true;
-        }
-
-        public static Vector3 IntersectPoint(Vector3 rayVector, Vector3 rayPoint, Vector3 planeNormal, Vector3 planePoint)
-        {
-            //code from: https://rosettacode.org/wiki/Find_the_intersection_of_a_line_with_a_plane
-            var diff = rayPoint - planePoint;
-            var prod1 = Vector3.Dot(diff, planeNormal);
-            var prod2 = Vector3.Dot(rayVector, planeNormal);
-            var prod3 = prod1 / prod2;
-            return rayPoint - rayVector * prod3;
-        }
-
-
-
         //CRITICAL: Do not read from or write to these, unless you understand how they work!
         private static readonly Dictionary<uint, int> __lastFrameHoveredParts__ = new();
         private static int s__currentFrameHoveredPart__;
@@ -194,9 +220,7 @@ namespace EditTK
 
         const int ELLIPSE_NUM_SEGMENTS = 32;
 
-        private static Matrix4x4 s_viewProjectionMat;
-        private static CameraState s_cam;
-        private static Rect s_viewport;
+        private static SceneViewState s_view;
         private static uint s_itemID;
         private static readonly Vector2[] s_ellipsePoints = new Vector2[ELLIPSE_NUM_SEGMENTS + 1];
         private static readonly Vector3[] s_transformMatVectors = new Vector3[4];
@@ -280,15 +304,13 @@ namespace EditTK
         /// 
         /// </summary>
         /// <param name="drawlist">The drawlist that will be used for drawing all Gizmos</param>
-        public static void BeginGizmoDrawing(string id, ImDrawListPtr drawlist, Matrix4x4 viewProjectionMat, Rect viewport, CameraState cam)
+        public static void BeginGizmoDrawing(string id, ImDrawListPtr drawlist, in SceneViewState view)
         {
             s__currentHoverIndex__ = 0;
             s__currentFrameHoveredPart__ = -1;
-            s_viewProjectionMat = viewProjectionMat;
+            s_view = view;
             Drawlist = drawlist;
 
-            s_viewport = viewport;
-            s_cam = cam;
             s_itemID = ImGui.GetID(id);
 
             if (!__lastFrameHoveredParts__.ContainsKey(s_itemID))
@@ -297,7 +319,7 @@ namespace EditTK
 
         public static void EndGizmoDrawing()
         {
-            bool isHovered = igItemHoverable(s_viewport, s_itemID);
+            bool isHovered = igItemHoverable(s_view.ViewportRect, s_itemID);
 
             __lastFrameHoveredParts__[s_itemID] = -1;
 
@@ -311,25 +333,15 @@ namespace EditTK
         /// <param name="vec"></param>
         /// <returns></returns>
         public static Vector2 WorldToScreen(Vector3 vec)
-        {
-            var vec4 = Vector4.Transform(new Vector4(vec, 1), s_viewProjectionMat);
-
-            var vec2 = new Vector2(vec4.X, vec4.Y) / Math.Max(0, vec4.W);
-
-            vec2.Y *= -1;
-
-            vec2 += Vector2.One;
-
-            return s_viewport.TopLeft + vec2 * s_viewport.Size * 0.5f;
-        }
+            => s_view.WorldToScreen(vec);
 
         /// <summary>
         /// Draws a line clipped by the camera plane
         /// </summary>
         public static void ClippedLine(Vector3 pointA, Vector3 pointB, uint color, float thickness)
         {
-            var clipPlaneNormal = s_cam.ForwardVector;
-            var clipPlaneOrigin = s_cam.Position + s_cam.ForwardVector * 0.1f;
+            var clipPlaneNormal = s_view.CamForwardVector;
+            var clipPlaneOrigin = s_view.CamPosition + s_view.CamForwardVector * 0.1f;
 
             bool pointABehindCam = Vector3.Dot(clipPlaneNormal, pointA - clipPlaneOrigin) <= 0;
             bool pointBBehindCam = Vector3.Dot(clipPlaneNormal, pointB - clipPlaneOrigin) <= 0;
@@ -338,10 +350,10 @@ namespace EditTK
                 return;
 
             if (pointABehindCam)
-                pointA = IntersectPoint(Vector3.Normalize(pointA - pointB), pointB, clipPlaneNormal, clipPlaneOrigin);
+                pointA = MathHelper.IntersectPoint(Vector3.Normalize(pointA - pointB), pointB, clipPlaneNormal, clipPlaneOrigin);
 
             if (pointBBehindCam)
-                pointB = IntersectPoint(Vector3.Normalize(pointB - pointA), pointA, clipPlaneNormal, clipPlaneOrigin);
+                pointB = MathHelper.IntersectPoint(Vector3.Normalize(pointB - pointA), pointA, clipPlaneNormal, clipPlaneOrigin);
 
             Drawlist.AddLine(WorldToScreen(pointA), WorldToScreen(pointB), color, thickness);
         }
@@ -357,7 +369,7 @@ namespace EditTK
         /// <returns><see langword="true"/> if the gizmo is hovered, <see langword="false"/> if not</returns>
         public static bool OrientationCube(Vector2 position, float radius, out Vector3 facingDirection)
         {
-            var rotMtx = Matrix4x4.CreateFromQuaternion(Quaternion.Inverse(s_cam.Rotation));
+            var rotMtx = Matrix4x4.CreateFromQuaternion(Quaternion.Inverse(s_view.CamRotation));
 
             var cubeToScreenSpace = rotMtx * Matrix4x4.CreateScale(radius / 2, -radius / 2, radius / 2) *
                                             Matrix4x4.CreateTranslation(new Vector3(position.X, position.Y, 0));
@@ -516,7 +528,7 @@ namespace EditTK
         }
 
         public static float Get3dGizmoScaling(Vector3 gizmoPosition, float gizmoSize2d)
-            => gizmoSize2d / (WorldToScreen(gizmoPosition + s_cam.RightVector) - WorldToScreen(gizmoPosition)).X;
+            => gizmoSize2d / (WorldToScreen(gizmoPosition + s_view.CamRightVector) - WorldToScreen(gizmoPosition)).X;
 
 
         /// <summary>
@@ -533,9 +545,9 @@ namespace EditTK
             const float HOVER_LINE_THICKNESS = 5;
 
             var mtx = transformMatrix;
-            s_transformMatVectors[0] = new(mtx.M11, mtx.M12, mtx.M13);
-            s_transformMatVectors[1] = new(mtx.M21, mtx.M22, mtx.M23);
-            s_transformMatVectors[2] = new(mtx.M31, mtx.M32, mtx.M33);
+            s_transformMatVectors[0] = Vector3.Normalize(new(mtx.M11, mtx.M12, mtx.M13));
+            s_transformMatVectors[1] = Vector3.Normalize(new(mtx.M21, mtx.M22, mtx.M23));
+            s_transformMatVectors[2] = Vector3.Normalize(new(mtx.M31, mtx.M32, mtx.M33));
 
             float r = radius - 2;
 
@@ -608,10 +620,10 @@ namespace EditTK
             Drawlist.AddCircleFilled(center2d, radius, 0x55_FF_FF_FF, 32);
             Drawlist.AddCircle(center2d, radius, 0xFF_FF_FF_FF, 32, 1.5f);
 
-            float distanceMouseToCenter2d = Vector2.Distance(center2d, mousePos);
 
             hoveredAxis = HoveredAxis.NONE;
 
+            float distanceMouseToCenter2d = Vector2.Distance(center2d, mousePos);
             if (HoverablePart(distanceMouseToCenter2d < radius))
                 hoveredAxis = HoveredAxis.TRACKBALL;
 
@@ -645,7 +657,7 @@ namespace EditTK
 
 
 
-            var planeVecY = Vector3.Normalize(Vector3.Cross(s_cam.ForwardVector, axisVec));
+            var planeVecY = Vector3.Normalize(Vector3.Cross(s_view.CamForwardVector, axisVec));
 
             var planeVecX = Vector3.Cross(planeVecY, axisVec);
 
@@ -721,14 +733,14 @@ namespace EditTK
             var mousePos = ImGui.GetMousePos();
 
             var mtx = transformMatrix;
-            s_transformMatVectors[0] = new(mtx.M11, mtx.M12, mtx.M13);
-            s_transformMatVectors[1] = new(mtx.M21, mtx.M22, mtx.M23);
-            s_transformMatVectors[2] = new(mtx.M31, mtx.M32, mtx.M33);
+            s_transformMatVectors[0] = Vector3.Normalize(new(mtx.M11, mtx.M12, mtx.M13));
+            s_transformMatVectors[1] = Vector3.Normalize(new(mtx.M21, mtx.M22, mtx.M23));
+            s_transformMatVectors[2] = Vector3.Normalize(new(mtx.M31, mtx.M32, mtx.M33));
 
             Vector3 center = transformMatrix.Translation;
             Vector2 center2d = WorldToScreen(center);
 
-            float gizmoScaleFactor = 1 / (WorldToScreen(center + s_cam.RightVector) - WorldToScreen(center)).X;
+            float gizmoScaleFactor = 1 / (WorldToScreen(center + s_view.CamRightVector) - WorldToScreen(center)).X;
 
 
 
@@ -740,7 +752,7 @@ namespace EditTK
                 Vector2 posA = WorldToScreen(center + s_transformMatVectors[axisA] * radius * gizmoScaleFactor * 0.7f);
                 Vector2 posB = WorldToScreen(center + s_transformMatVectors[axisB] * radius * gizmoScaleFactor * 0.7f);
 
-                bool hovered = HoverablePart(IsPointInTriangle(mousePos, center2d, posA, posB));
+                bool hovered = HoverablePart(MathHelper.IsPointInTriangle(mousePos, center2d, posA, posB));
 
                 var col = hovered ? 0xFF_FF_FF_FF : AdditiveBlend(colA, colB);
 
@@ -766,6 +778,13 @@ namespace EditTK
             if (GizmoAxisHandle(center, center2d, mousePos, radius, gizmoScaleFactor, 2))
                 hoveredAxis = HoveredAxis.Z_AXIS;
 
+            float uniformScaleRingRadius = radius + 10;
+            float distanceMouseToCenter2d = Vector2.Distance(center2d, mousePos);
+            if (HoverablePart(Math.Abs(distanceMouseToCenter2d - uniformScaleRingRadius) < 5))
+                hoveredAxis = HoveredAxis.ALL_AXES;
+
+            Drawlist.AddCircle(center2d, uniformScaleRingRadius, hoveredAxis == HoveredAxis.ALL_AXES ? 0x88_FF_FF_FF : 0x55_FF_FF_FF, 32, 3.5f);
+
             return hoveredAxis != HoveredAxis.NONE;
         }
 
@@ -785,14 +804,14 @@ namespace EditTK
             var mousePos = ImGui.GetMousePos();
 
             var mtx = transformMatrix;
-            s_transformMatVectors[0] = new(mtx.M11, mtx.M12, mtx.M13);
-            s_transformMatVectors[1] = new(mtx.M21, mtx.M22, mtx.M23);
-            s_transformMatVectors[2] = new(mtx.M31, mtx.M32, mtx.M33);
+            s_transformMatVectors[0] = Vector3.Normalize(new(mtx.M11, mtx.M12, mtx.M13));
+            s_transformMatVectors[1] = Vector3.Normalize(new(mtx.M21, mtx.M22, mtx.M23));
+            s_transformMatVectors[2] = Vector3.Normalize(new(mtx.M31, mtx.M32, mtx.M33));
 
             Vector3 center = transformMatrix.Translation;
             Vector2 center2d = WorldToScreen(center);
 
-            float gizmoScaleFactor = 1 / (WorldToScreen(center + s_cam.RightVector) - WorldToScreen(center)).X;
+            float gizmoScaleFactor = 1 / (WorldToScreen(center + s_view.CamRightVector) - WorldToScreen(center)).X;
 
 
 
@@ -806,7 +825,7 @@ namespace EditTK
                 Vector2 posAB = WorldToScreen(center + s_transformMatVectors[axisA] * lineLength * gizmoScaleFactor * 0.5f +
                                                        s_transformMatVectors[axisB] * lineLength * gizmoScaleFactor * 0.5f);
 
-                bool hovered = HoverablePart(IsPointInQuad(mousePos, center2d, posA, posAB, posB));
+                bool hovered = HoverablePart(MathHelper.IsPointInQuad(mousePos, center2d, posA, posAB, posB));
 
                 var col = hovered ? 0xFF_FF_FF_FF : AdditiveBlend(colA, colB);
 
