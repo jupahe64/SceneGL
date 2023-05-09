@@ -487,7 +487,11 @@ namespace EditTK
         {
             Vector3 hitPoint = view.MouseRayHitOnPlane(view.CamForwardVector, _center);
             Vector3 offset = hitPoint - _center;
-            return offset;
+            return new(
+                Vector3.Dot(offset, _axisVectorX),
+                Vector3.Dot(offset, _axisVectorY),
+                Vector3.Dot(offset, _axisVectorZ)
+                );
         }
     }
 

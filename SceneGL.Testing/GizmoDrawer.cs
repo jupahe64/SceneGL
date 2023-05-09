@@ -428,7 +428,7 @@ namespace EditTK
                     var mu_abs = Math.Abs(mu);
                     var mv_abs = Math.Abs(mv);
 
-                    if (mu_abs <= 1 && mv_abs <= 1)
+                    if (HoverablePart(mu_abs <= 1 && mv_abs <= 1))
                     {
                         faceHit = -forward + mv * up + mu * Vector3.Cross(forward, up);
 
@@ -524,11 +524,46 @@ namespace EditTK
 
             facingDirection = snappedHitPos;
 
-            return HoverablePart(snappedHitPos != Vector3.Zero);
+            return snappedHitPos != Vector3.Zero;
         }
 
         public static float Get3dGizmoScaling(Vector3 gizmoPosition, float gizmoSize2d)
             => gizmoSize2d / (WorldToScreen(gizmoPosition + s_view.CamRightVector) - WorldToScreen(gizmoPosition)).X;
+
+        private static bool HoverableCircle(Vector2 center, float radius,
+            uint color, uint hoverColor)
+        {
+            float distance = Vector2.Distance(center, ImGui.GetMousePos());
+
+            bool isHovered;
+            isHovered = HoverablePart(distance <= radius);
+
+            
+            Drawlist.AddCircleFilled(center, radius, isHovered ? hoverColor : color, 32);
+
+            return isHovered;
+        }
+
+        private static bool HoverableRing(Vector2 center, float radius, float thickness, bool isOutlineOnly,
+            uint color, uint hoverColor)
+        {
+            float distance = Vector2.Distance(center, ImGui.GetMousePos());
+
+            bool isHovered;
+            isHovered = HoverablePart(Math.Abs(distance - radius) < thickness / 2f + 4);
+
+            if (isOutlineOnly)
+            {
+                Drawlist.AddCircle(center, radius - thickness / 2f, isHovered ? hoverColor : color, 32, 1.5f);
+                Drawlist.AddCircle(center, radius + thickness / 2f, isHovered ? hoverColor : color, 32, 1.5f);
+            }
+            else
+            {
+                Drawlist.AddCircle(center, radius, isHovered ? hoverColor : color, 32, thickness);
+            }
+
+            return isHovered;
+        }
 
 
         /// <summary>
@@ -542,7 +577,7 @@ namespace EditTK
         /// <returns><see langword="true"/> if the gizmo is hovered, <see langword="false"/> if not</returns>
         public static bool RotationGizmo(in Matrix4x4 transformMatrix, float radius, out HoveredAxis hoveredAxis)
         {
-            const float HOVER_LINE_THICKNESS = 5;
+            hoveredAxis = HoveredAxis.NONE;
 
             var mtx = transformMatrix;
             s_transformMatVectors[0] = Vector3.Normalize(new(mtx.M11, mtx.M12, mtx.M13));
@@ -560,14 +595,16 @@ namespace EditTK
 
             bool AxisGimbal(int axis)
             {
-                var (scaleVecX, scaleVecY) = GetBillboardPlane2d(axis, center, gizmoScaleFactor);
+                
+
+                var (row0, row1) = GetBillboardPlaneMatrix2d(axis, center, gizmoScaleFactor);
 
                 #region generating lines
                 for (int i = 0; i <= ELLIPSE_NUM_SEGMENTS / 2; i++)
                 {
                     double angle = i * Math.PI * 2 / ELLIPSE_NUM_SEGMENTS;
 
-                    Vector2 vec = scaleVecX * (float)Math.Sin(angle) + scaleVecY * (float)Math.Cos(angle);
+                    Vector2 vec = row0 * (float)Math.Sin(angle) + row1 * (float)Math.Cos(angle);
 
                     s_ellipsePoints[i] = center2d + vec * r;
                 }
@@ -576,40 +613,41 @@ namespace EditTK
 
                 bool isHovered = false;
 
+                const float HOVER_LINE_THICKNESS = 5;
+                #region hover test
+                Vector2 diff = mousePos - center2d;
+
+                if (Matrix3x2.Invert(new Matrix3x2(row0.X, row0.Y, row1.X, row1.Y, 0, 0), out var invBillboard2dMat))
                 {
-                    #region hover test
-                    Vector2 diff = mousePos - center2d;
+                    //gimbal is an ellipse Width != 0
 
-                    if (Matrix3x2.Invert(new Matrix3x2(scaleVecX.X, scaleVecX.Y, scaleVecY.X, scaleVecY.Y, 0, 0), out var invScale))
+                    var orthoScaleVecY = new Vector2(row1.Y, -row1.X);
+
+                    if (Vector2.Dot(row0, orthoScaleVecY) < 0)
+                        orthoScaleVecY *= -1;
+
+                    if (Vector2.Dot(diff, orthoScaleVecY) > 0) //TODO
                     {
-                        //gimbal is an ellipse Width != 0
+                        float invScaleX = 1 / row0.Length();
+                        float invScaleY = 1 / row1.Length();
 
-                        var orthoScaleVecY = new Vector2(scaleVecY.Y, -scaleVecY.X);
+                        Vector2 diffT = Vector2.Transform(diff, invBillboard2dMat);
 
-                        if (Vector2.Dot(scaleVecX, orthoScaleVecY) < 0)
-                            orthoScaleVecY *= -1;
-
-                        if (Vector2.Dot(diff, orthoScaleVecY) > 0) //TODO
-                        {
-                            float invScaleX = 1 / scaleVecX.Length();
-                            float invScaleY = 1 / scaleVecY.Length();
-
-                            Vector2 diffT = Vector2.Transform(diff, invScale);
-
-                            isHovered = Math.Abs(diffT.Length() - r) < HOVER_LINE_THICKNESS * (Vector2.Normalize(diffT) * new Vector2(invScaleX, invScaleY)).Length();
-                        }
+                        isHovered = Math.Abs(diffT.Length() - r) < HOVER_LINE_THICKNESS * (Vector2.Normalize(diffT) * new Vector2(invScaleX, invScaleY)).Length();
                     }
-                    else
-                    {
-                        //gimbal is a straigt line Width == 0
-
-                        isHovered = Math.Abs(Vector2.Dot(diff, new Vector2(scaleVecY.Y, -scaleVecY.X))) < HOVER_LINE_THICKNESS &&
-                                    Math.Abs(Vector2.Dot(diff, new Vector2(scaleVecY.X, scaleVecY.Y))) < r;
-                    }
-                    #endregion
                 }
+                else
+                {
+                    //gimbal is a straigt line Width == 0
 
-                uint color = HoverablePart(isHovered) ? HOVER_COLOR : s_axisColors[axis];
+                    isHovered = Math.Abs(Vector2.Dot(diff, new Vector2(row1.Y, -row1.X))) < HOVER_LINE_THICKNESS &&
+                                Math.Abs(Vector2.Dot(diff, new Vector2(row1.X, row1.Y))) < r;
+                }
+                #endregion
+
+                isHovered = HoverablePart(isHovered);
+
+                uint color = isHovered ? HOVER_COLOR : s_axisColors[axis];
 
                 //draw the Gimbal
                 Drawlist.AddPolyline(ref s_ellipsePoints[0], ELLIPSE_NUM_SEGMENTS / 2 + 1, color, ImDrawFlags.None, 2.5f);
@@ -617,18 +655,11 @@ namespace EditTK
                 return isHovered;
             }
 
-            Drawlist.AddCircleFilled(center2d, radius, 0x55_FF_FF_FF, 32);
+
+            if (HoverableCircle(center2d, radius, 0x55_FF_FF_FF, 0x88_FF_FF_FF))
+                hoveredAxis = HoveredAxis.TRACKBALL;
             Drawlist.AddCircle(center2d, radius, 0xFF_FF_FF_FF, 32, 1.5f);
 
-
-            hoveredAxis = HoveredAxis.NONE;
-
-            float distanceMouseToCenter2d = Vector2.Distance(center2d, mousePos);
-            if (HoverablePart(distanceMouseToCenter2d < radius))
-                hoveredAxis = HoveredAxis.TRACKBALL;
-
-            if (hoveredAxis == HoveredAxis.TRACKBALL)
-                Drawlist.AddCircleFilled(center2d, radius, 0x33_FF_FF_FF, 32);
 
             if (AxisGimbal(0))
                 hoveredAxis = HoveredAxis.X_AXIS;
@@ -637,21 +668,14 @@ namespace EditTK
             if (AxisGimbal(2))
                 hoveredAxis = HoveredAxis.Z_AXIS;
 
-            float camVecGimbalRadius = radius + 10;
-
-
-            if (HoverablePart(Math.Abs(distanceMouseToCenter2d - camVecGimbalRadius) < 5))
+            
+            if(HoverableRing(center2d, radius + 10, 3, true, 0x55_FF_FF_FF, 0x88_FF_FF_FF))
                 hoveredAxis = HoveredAxis.VIEW_AXIS;
-
-            Drawlist.AddCircle(center2d, camVecGimbalRadius - 1.5f, hoveredAxis == HoveredAxis.VIEW_AXIS ? 0x88_FF_FF_FF : 0x55_FF_FF_FF, 32, 1.5f);
-            Drawlist.AddCircle(center2d, camVecGimbalRadius + 1.5f, hoveredAxis == HoveredAxis.VIEW_AXIS ? 0x88_FF_FF_FF : 0x55_FF_FF_FF, 32, 1.5f);
-
-
 
             return hoveredAxis != HoveredAxis.NONE;
         }
 
-        private static (Vector2 planeVecX, Vector2 planeVecY) GetBillboardPlane2d(int axis, in Vector3 planeOrigin3d, float scaling)
+        private static (Vector2 row0, Vector2 row1) GetBillboardPlaneMatrix2d(int axis, in Vector3 planeOrigin3d, float scaling)
         {
             Vector3 axisVec = s_transformMatVectors[axis];
 
@@ -691,7 +715,7 @@ namespace EditTK
             if (isArrow)
             {
 
-                var (scaleVecX, scaleVecY) = GetBillboardPlane2d(axis, handleEndPos, gizmoScaleFactor * 5);
+                var (row0, row1) = GetBillboardPlaneMatrix2d(axis, handleEndPos, gizmoScaleFactor * 5);
 
 
 
@@ -701,7 +725,7 @@ namespace EditTK
                 {
                     double angle = i * Math.PI * 2 / ELLIPSE_NUM_SEGMENTS;
 
-                    Vector2 vec = scaleVecX * (float)Math.Sin(angle) + scaleVecY * (float)Math.Cos(angle);
+                    Vector2 vec = row0 * (float)Math.Sin(angle) + row1 * (float)Math.Cos(angle);
 
                     s_ellipsePoints[i] = handleEndPos2d + vec;
                 }
@@ -778,12 +802,8 @@ namespace EditTK
             if (GizmoAxisHandle(center, center2d, mousePos, radius, gizmoScaleFactor, 2))
                 hoveredAxis = HoveredAxis.Z_AXIS;
 
-            float uniformScaleRingRadius = radius + 10;
-            float distanceMouseToCenter2d = Vector2.Distance(center2d, mousePos);
-            if (HoverablePart(Math.Abs(distanceMouseToCenter2d - uniformScaleRingRadius) < 5))
+            if (HoverableRing(center2d, radius + 10, 6f, false,  0x55_FF_FF_FF, 0x88_FF_FF_FF))
                 hoveredAxis = HoveredAxis.ALL_AXES;
-
-            Drawlist.AddCircle(center2d, uniformScaleRingRadius, hoveredAxis == HoveredAxis.ALL_AXES ? 0x88_FF_FF_FF : 0x55_FF_FF_FF, 32, 3.5f);
 
             return hoveredAxis != HoveredAxis.NONE;
         }
@@ -852,15 +872,8 @@ namespace EditTK
             if (GizmoAxisHandle(center, center2d, mousePos, lineLength, gizmoScaleFactor, 2, true))
                 hoveredAxis = HoveredAxis.Z_AXIS;
 
-            float radius = 5;
-
-            float distanceMouseToCenter2d = Vector2.Distance(center2d, mousePos);
-
-            if (HoverablePart(distanceMouseToCenter2d < radius + 5))
+            if (HoverableCircle(center2d, 5, 0xFF_FF_FF_FF, HOVER_COLOR))
                 hoveredAxis = HoveredAxis.FREE;
-
-            var col = hoveredAxis == HoveredAxis.FREE ? HOVER_COLOR : 0xFF_FF_FF_FF;
-            Drawlist.AddCircleFilled(center2d, radius, col, 32);
 
             return hoveredAxis != HoveredAxis.NONE;
         }

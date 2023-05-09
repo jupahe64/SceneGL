@@ -22,6 +22,14 @@ using EditTK;
 
 namespace SceneGL.Testing
 {
+    internal enum TransformGizmoType
+    {
+        None,
+        Translate,
+        Rotate,
+        Scale
+    }
+
     internal class TestWindow
     {
         private static readonly object _glLock = new();
@@ -31,6 +39,7 @@ namespace SceneGL.Testing
         private IInputContext? _input;
         private ImGuiController? _imguiController;
         private ITransformAction? _transformAction;
+        private TransformGizmoType _transformGizmo;
 
         private ShaderSource _vertexShaderSource = InfiniteGrid.VertexSource;
         private ShaderSource _fragmentShaderSource = InfiniteGrid.FragmentSource;
@@ -466,47 +475,55 @@ namespace SceneGL.Testing
                 }
                 else
                 {
-                    //if (GizmoDrawer.RotationGizmo(_transform, 80, out var hoveredAxis) && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
-                    //{
-                    //    const double AngleSnapping = 45;
+                    HoveredAxis hoveredAxis;
 
-                    //    if (GizmoResultHelper.IsSingleAxis(hoveredAxis, out int axis))
-                    //        _transformAction = AxisRotationAction.Start(axis,
-                    //            Vector3.Transform(new(), _transform), _transform, AngleSnapping, 
-                    //            in viewState);
+                    if (_transformGizmo == TransformGizmoType.Rotate && 
+                        GizmoDrawer.RotationGizmo(_transform, 80, out hoveredAxis) && 
+                        ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                    {
+                        const double AngleSnapping = 45;
 
-                    //    else if(hoveredAxis == HoveredAxis.VIEW_AXIS)
-                    //        _transformAction = AxisRotationAction.StartViewAxisRotation(
-                    //            Vector3.Transform(new(), _transform), _transform, AngleSnapping, 
-                    //            in viewState);
+                        if (GizmoResultHelper.IsSingleAxis(hoveredAxis, out int axis))
+                            _transformAction = AxisRotationAction.Start(axis,
+                                Vector3.Transform(new(), _transform), _transform, AngleSnapping,
+                                in viewState);
 
-                    //    else if(hoveredAxis == HoveredAxis.TRACKBALL)
-                    //        _transformAction = TrackballRotationAction.Start(
-                    //            Vector3.Transform(new(), _transform), _transform, AngleSnapping, 
-                    //            in viewState);
-                    //}
+                        else if (hoveredAxis == HoveredAxis.VIEW_AXIS)
+                            _transformAction = AxisRotationAction.StartViewAxisRotation(
+                                Vector3.Transform(new(), _transform), _transform, AngleSnapping,
+                                in viewState);
 
-                    //if (GizmoDrawer.TranslationGizmo(_transform, 80, out var hoveredAxis) && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
-                    //{
-                    //    const float UnitSnapping = 0.5f;
+                        else if (hoveredAxis == HoveredAxis.TRACKBALL)
+                            _transformAction = TrackballRotationAction.Start(
+                                Vector3.Transform(new(), _transform), _transform, AngleSnapping,
+                                in viewState);
+                    }
 
-                    //    if (GizmoResultHelper.IsSingleAxis(hoveredAxis, out int axis))
-                    //        _transformAction = AxisTranslateAction.Start(axis,
-                    //            Vector3.Transform(new(), _transform), _transform, UnitSnapping,
-                    //            in viewState);
+                    if (_transformGizmo == TransformGizmoType.Translate &&
+                        GizmoDrawer.TranslationGizmo(_transform, 80, out hoveredAxis) && 
+                        ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                    {
+                        const float UnitSnapping = 0.5f;
 
-                    //    else if (GizmoResultHelper.IsPlane(hoveredAxis, out int axisA, out int axisB))
-                    //        _transformAction = PlaneTranslateAction.Start(axisA, axisB,
-                    //            Vector3.Transform(new(), _transform), _transform, UnitSnapping,
-                    //            in viewState);
+                        if (GizmoResultHelper.IsSingleAxis(hoveredAxis, out int axis))
+                            _transformAction = AxisTranslateAction.Start(axis,
+                                Vector3.Transform(new(), _transform), _transform, UnitSnapping,
+                                in viewState);
 
-                    //    else if (hoveredAxis == HoveredAxis.FREE)
-                    //        _transformAction = FreeTranslateAction.Start(
-                    //            Vector3.Transform(new(), _transform), _transform, UnitSnapping,
-                    //            in viewState);
-                    //}
+                        else if (GizmoResultHelper.IsPlane(hoveredAxis, out int axisA, out int axisB))
+                            _transformAction = PlaneTranslateAction.Start(axisA, axisB,
+                                Vector3.Transform(new(), _transform), _transform, UnitSnapping,
+                                in viewState);
 
-                    if (GizmoDrawer.ScaleGizmo(_transform, 80, out var hoveredAxis) && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                        else if (hoveredAxis == HoveredAxis.FREE)
+                            _transformAction = FreeTranslateAction.Start(
+                                Vector3.Transform(new(), _transform), _transform, UnitSnapping,
+                                in viewState);
+                    }
+
+                    if (_transformGizmo == TransformGizmoType.Scale &&
+                        GizmoDrawer.ScaleGizmo(_transform, 80, out hoveredAxis) && 
+                        ImGui.IsMouseClicked(ImGuiMouseButton.Left))
                     {
                         const float UnitSnapping = 0.5f;
 
@@ -531,6 +548,17 @@ namespace SceneGL.Testing
                 GizmoDrawer.OrientationCube(new Vector2(100, 100), 40, out _);
 
                 GizmoDrawer.EndGizmoDrawing();
+
+                ImGui.SetCursorPos(topLeft + new Vector2(5, 10));
+                ImGui.BeginChild("scene_view_tools", new Vector2(80, 100), false, ImGuiWindowFlags.NoDecoration);
+                if (ImGui.Button("Translate"))
+                    _transformGizmo = TransformGizmoType.Translate;
+                if (ImGui.Button("Rotate"))
+                    _transformGizmo = TransformGizmoType.Rotate;
+                if (ImGui.Button("Scale"))
+                    _transformGizmo = TransformGizmoType.Scale;
+
+                ImGui.EndChild();
             }
 
             if (!isRightDragging)
@@ -594,7 +622,7 @@ namespace SceneGL.Testing
 
                 ImGui.SetNextItemWidth(150);
                 ImGui.DragFloat("Yaw", ref _transform_yaw);
-                ImGui.SetKeyboardFocusHere();
+                //ImGui.SetKeyboardFocusHere();
                 ImGui.SetNextItemWidth(150);
                 ImGui.DragFloat("Pitch", ref _transform_pitch);
                 ImGui.SetNextItemWidth(150);
