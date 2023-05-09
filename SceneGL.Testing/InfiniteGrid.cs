@@ -136,7 +136,7 @@ namespace SceneGL.Testing
             s_initialized = true;
 
             
-            s_model = new ModelBuilder<Vertex>().AddPlane(
+            s_model = new ModelBuilder<ushort, Vertex>().AddPlane(
                 new Vertex { Position = new Vector3(-1000, 0, -1000) },
                 new Vertex { Position = new Vector3(+1000, 0, -1000) },
                 new Vertex { Position = new Vector3(-1000, 0, +1000) },

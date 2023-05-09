@@ -79,7 +79,7 @@ namespace SceneGL.Testing
             #region Cube Model
             {
 
-                var builder = new ModelBuilder<Vertex>();
+                var builder = new ModelBuilder<ushort, Vertex>();
 
                 builder!.AddPlane(
                         new Vertex { Position = new Vector3(-0.5f,  0.5f, 0), UV = new Vector2(0, 0) },

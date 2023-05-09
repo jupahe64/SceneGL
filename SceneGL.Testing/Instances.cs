@@ -11,7 +11,6 @@ using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 using Silk.NET.Maths;
-using SharpDX.Direct3D11;
 using SceneGL.Materials;
 using SceneGL.Materials.Common;
 
@@ -93,7 +92,7 @@ namespace SceneGL.Testing
             #region Cube Model
             {
 
-                var builder = new ModelBuilder<Vertex>();
+                var builder = new ModelBuilder<ushort, Vertex>();
 
                 float BEVEL = 0.1f;
 

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
@@ -15,12 +16,13 @@ namespace SceneGL
     /// <para>The resulting <see cref="RenderableModel"/> will use <see langword="uint"/> as it's index format</para>
     /// </summary>
     /// <typeparam name="TVertex"></typeparam>
-    public class ModelBuilder<TVertex>
+    public class ModelBuilder<TIndex, TVertex>
         where TVertex : unmanaged
+        where TIndex : unmanaged, IUnsignedNumber<TIndex>
     {
         private readonly List<TVertex> _vertices = new();
-        private readonly Dictionary<TVertex, uint> _vertexLookup = new();
-        private readonly List<uint> _indices = new();
+        private readonly Dictionary<TVertex, TIndex> _vertexLookup = new();
+        private readonly List<TIndex> _indices = new();
 
         private void AddVertex(TVertex vertex)
         {
@@ -30,14 +32,14 @@ namespace SceneGL
             }
             else
             {
-                uint last = (uint)_vertices.Count;
+                TIndex last = TIndex.CreateChecked(_vertices.Count);
                 _indices.Add(last);
                 _vertices.Add(vertex);
                 _vertexLookup.Add(vertex, last);
             }
         }
 
-        public ModelBuilder<TVertex> AddTriangle(TVertex v1, TVertex v2, TVertex v3)
+        public ModelBuilder<TIndex, TVertex> AddTriangle(TVertex v1, TVertex v2, TVertex v3)
         {
             AddVertex(v1);
             AddVertex(v2);
@@ -46,7 +48,7 @@ namespace SceneGL
             return this;
         }
 
-        public ModelBuilder<TVertex> AddPlane(TVertex v1, TVertex v2, TVertex v3, TVertex v4)
+        public ModelBuilder<TIndex, TVertex> AddPlane(TVertex v1, TVertex v2, TVertex v3, TVertex v4)
         {
             AddTriangle(v2, v1, v3);
             AddTriangle(v2, v3, v4);
@@ -56,13 +58,13 @@ namespace SceneGL
 
         public RenderableModel GetModel(GL gl)
         {
-            return RenderableModel.Create<uint, TVertex>(gl,
+            return RenderableModel.Create<TIndex, TVertex>(gl,
                 CollectionsMarshal.AsSpan(_indices),
                 CollectionsMarshal.AsSpan(_vertices)
                 );
         }
 
-        public void GetData(out ReadOnlySpan<uint> indices, out ReadOnlySpan<TVertex> vertices)
+        public void GetData(out ReadOnlySpan<TIndex> indices, out ReadOnlySpan<TVertex> vertices)
         {
             indices = CollectionsMarshal.AsSpan(_indices);
             vertices = CollectionsMarshal.AsSpan(_vertices);
