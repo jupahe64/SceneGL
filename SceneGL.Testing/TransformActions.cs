@@ -136,10 +136,17 @@ namespace EditTK
 
             Vector2 center2d = GizmoDrawer.WorldToScreen(_center);
 
+            float fontSize = 18;
+
+            var offset = Vector2.Zero;
+            string text = "Rotating along ";
+
+            GizmoDrawer.Drawlist.AddText(ImGui.GetFont(), fontSize, center2d, 0xFF_FF_FF_FF, text);
+            offset.X += ImGui.CalcTextSize(text).X * fontSize / ImGui.GetFontSize();
+
             GizmoDrawer.Drawlist.AddText(
-                ImGui.GetFont(), 18,
-                center2d, _axisInfo.Color,
-                $"Rotaing along {_axisInfo.Name} : {_rotationTracker.DeltaValue,5:0.#}°");
+                ImGui.GetFont(), fontSize, center2d + offset, _axisInfo.Color,
+                $"{_axisInfo.Name} : {_rotationTracker.DeltaValue,5:0.#}°");
 
             if (_axisInfo != AxisInfo.ViewRotationAxis)
             {
@@ -150,7 +157,7 @@ namespace EditTK
             GizmoDrawer.Drawlist.AddCircleFilled(center2d, 3, _axisInfo.Color);
 
 
-            DeltaMatrix = Matrix4x4.CreateFromAxisAngle(_axisVector, (float)(_rotationTracker.DeltaValue * MathF.PI / 180f));
+            DeltaMatrix = Matrix4x4.CreateFromAxisAngle(_axisVector, (float)(_rotationTracker.DeltaValue * Math.PI / 180.0));
         }
 
         private double GetAngle(in SceneViewState view)
@@ -165,13 +172,13 @@ namespace EditTK
                 Vector2 lineDir2d = Vector2.Normalize(view.WorldToScreen(_center + lineDir) - view.WorldToScreen(_center));
 
                 float a = Vector2.Dot(lineDir2d, relativeMousePos) / 100f;
-                return Math.Pow(Math.Abs(a), 0.9) * Math.Sign(a) * 180;
+                return Math.Pow(Math.Abs(a), 0.9) * Math.Sign(a) * 180.0;
             }
             else
             {
                 var rotationSign = Math.Sign(axisCamDot);
                 Vector2 direction = Vector2.Normalize(relativeMousePos);
-                return Math.Atan2(-direction.Y, direction.X) * rotationSign * 180f / MathF.PI;
+                return Math.Atan2(-direction.Y, direction.X) * rotationSign * 180.0 / Math.PI;
             }
         }
     }
@@ -206,8 +213,8 @@ namespace EditTK
 
         protected override void OnUpdate(in SceneViewState view, bool isSnapping)
         {
-            if (_rotationXTracker == null || _rotationYTracker == null)
-                throw new NullReferenceException($"Important instance variables are null, {nameof(ITransformAction.StartTransform)} has not been called");
+            Debug.Assert(_rotationXTracker != null);
+            Debug.Assert(_rotationYTracker != null);
 
             (double angleX, double angleY) = GetAngles(in view);
 
@@ -219,10 +226,10 @@ namespace EditTK
             GizmoDrawer.Drawlist.AddText(
                 ImGui.GetFont(), 18,
                 center2d, AxisInfo.ViewRotationAxis.Color,
-                $"Rotaing along Trackball : {-_rotationXTracker.DeltaValue,5:0.#}° {-_rotationYTracker.DeltaValue,5:0.#}°");
+                $"Rotating along Trackball : {-_rotationXTracker.DeltaValue,5:0.#}° {-_rotationYTracker.DeltaValue,5:0.#}°");
 
-            DeltaMatrix = Matrix4x4.CreateFromAxisAngle(view.CamUpVector, (float)(_rotationXTracker.DeltaValue * MathF.PI / 180f));
-            DeltaMatrix *= Matrix4x4.CreateFromAxisAngle(view.CamRightVector, (float)(_rotationYTracker.DeltaValue * MathF.PI / 180f));
+            DeltaMatrix = Matrix4x4.CreateFromAxisAngle(view.CamUpVector, (float)(_rotationXTracker.DeltaValue * Math.PI / 180.0));
+            DeltaMatrix *= Matrix4x4.CreateFromAxisAngle(view.CamRightVector, (float)(_rotationYTracker.DeltaValue * Math.PI / 180.0));
         }
 
         private (double angleX, double angleY) GetAngles(in SceneViewState view)
@@ -282,17 +289,22 @@ namespace EditTK
 
             Vector2 center2d = GizmoDrawer.WorldToScreen(_center);
 
+            float fontSize = 18;
+
+            var offset = Vector2.Zero;
+            string text = "Moving along ";
+
+            GizmoDrawer.Drawlist.AddText(ImGui.GetFont(), fontSize, center2d, 0xFF_FF_FF_FF, text);
+            offset.X += ImGui.CalcTextSize(text).X * fontSize / ImGui.GetFontSize();
+
             GizmoDrawer.Drawlist.AddText(
-                ImGui.GetFont(), 18,
-                center2d, _axisInfo.Color,
-                $"Moving along {_axisInfo.Name} : {_offsetTracker.DeltaValue,5:0.###}m");
+                ImGui.GetFont(), fontSize, center2d + offset, _axisInfo.Color,
+                $"{_axisInfo.Name} : {_offsetTracker.DeltaValue,8:0.###}m");
 
-            if (_axisInfo != AxisInfo.ViewRotationAxis)
-            {
-                GizmoDrawer.ClippedLine(_center, _center + _axisVector * 1000, _axisInfo.Color, 1.5f);
-                GizmoDrawer.ClippedLine(_center, _center - _axisVector * 1000, _axisInfo.Color & 0xAA_FF_FF_FF, 1.5f);
-            }
-
+            
+            GizmoDrawer.ClippedLine(_center, _center + _axisVector * 1000, _axisInfo.Color, 1.5f);
+            GizmoDrawer.ClippedLine(_center, _center - _axisVector * 1000, _axisInfo.Color & 0xAA_FF_FF_FF, 1.5f);
+            
             GizmoDrawer.Drawlist.AddCircleFilled(center2d, 3, _axisInfo.Color);
 
 
@@ -371,13 +383,23 @@ namespace EditTK
 
             Vector2 center2d = GizmoDrawer.WorldToScreen(_center);
 
-            uint planeColor = GizmoDrawer.AdditiveBlend(_axisInfoA.Color, _axisInfoB.Color);
+            float fontSize = 18;
+
+            var offset = Vector2.Zero;
+            string text = "Moving along ";
+
+            GizmoDrawer.Drawlist.AddText(ImGui.GetFont(), fontSize, center2d, 0xFF_FF_FF_FF, text);
+            offset.X += ImGui.CalcTextSize(text).X * fontSize / ImGui.GetFontSize();
 
             GizmoDrawer.Drawlist.AddText(
-                ImGui.GetFont(), 18,
-                center2d, planeColor,
-                $"Moving along {_axisInfoA.Name} : {_offsetTrackerAxisA.DeltaValue,5:0.###}m\n" +
-                $"             {_axisInfoB.Name} : {_offsetTrackerAxisB.DeltaValue,5:0.###}m");
+                ImGui.GetFont(), fontSize, center2d + offset, _axisInfoA.Color,
+                $"{_axisInfoA.Name} : {_offsetTrackerAxisA.DeltaValue,8:0.###}m");
+            offset.Y += fontSize;
+
+            GizmoDrawer.Drawlist.AddText(
+                ImGui.GetFont(), fontSize, center2d + offset, _axisInfoB.Color,
+                $"{_axisInfoB.Name} : {_offsetTrackerAxisB.DeltaValue,8:0.###}m");
+
 
             GizmoDrawer.ClippedLine(_center, _center + _axisVectorA * 1000, _axisInfoA.Color, 1.5f);
             GizmoDrawer.ClippedLine(_center, _center - _axisVectorA * 1000, _axisInfoA.Color & 0xAA_FF_FF_FF, 1.5f);
@@ -385,7 +407,8 @@ namespace EditTK
             GizmoDrawer.ClippedLine(_center, _center + _axisVectorB * 1000, _axisInfoB.Color, 1.5f);
             GizmoDrawer.ClippedLine(_center, _center - _axisVectorB * 1000, _axisInfoB.Color & 0xAA_FF_FF_FF, 1.5f);
 
-            GizmoDrawer.Drawlist.AddCircleFilled(center2d, 3, planeColor);
+            GizmoDrawer.Drawlist.AddCircleFilled(center2d, 3,
+                GizmoDrawer.AdditiveBlend(_axisInfoA.Color, _axisInfoB.Color));
 
 
             DeltaMatrix = Matrix4x4.CreateTranslation(
@@ -465,12 +488,27 @@ namespace EditTK
 
             Vector2 center2d = GizmoDrawer.WorldToScreen(_center);
 
+            float fontSize = 18;
+
+            var offset = Vector2.Zero;
+            string text = "Moving along ";
+            
+            GizmoDrawer.Drawlist.AddText(ImGui.GetFont(), fontSize, center2d, 0xFF_FF_FF_FF, text);
+            offset.X += ImGui.CalcTextSize(text).X * fontSize / ImGui.GetFontSize();
+
             GizmoDrawer.Drawlist.AddText(
-                ImGui.GetFont(), 18,
-                center2d, 0xFF_FF_FF_FF,
-                $"Moving along {AxisInfo.Axis0.Name} : {_offsetTrackerX.DeltaValue,5:0.###}m\n" +
-                $"             {AxisInfo.Axis1.Name} : {_offsetTrackerY.DeltaValue,5:0.###}m\n" +
-                $"             {AxisInfo.Axis2.Name} : {_offsetTrackerZ.DeltaValue,5:0.###}m");
+                ImGui.GetFont(), fontSize, center2d + offset, AxisInfo.Axis0.Color,
+                $"{AxisInfo.Axis0.Name} : {_offsetTrackerX.DeltaValue,8:0.###}m");
+            offset.Y += fontSize;
+
+            GizmoDrawer.Drawlist.AddText(
+                ImGui.GetFont(), fontSize, center2d + offset, AxisInfo.Axis1.Color,
+                $"{AxisInfo.Axis1.Name} : {_offsetTrackerY.DeltaValue,8:0.###}m");
+            offset.Y += fontSize;
+
+            GizmoDrawer.Drawlist.AddText(
+                ImGui.GetFont(), fontSize, center2d + offset, AxisInfo.Axis2.Color,
+                $"{AxisInfo.Axis2.Name} : {_offsetTrackerZ.DeltaValue,8:0.###}m");
 
 
             GizmoDrawer.Drawlist.AddCircleFilled(center2d, 3, 0xFF_FF_FF_FF);
@@ -569,10 +607,25 @@ namespace EditTK
             Vector2 center2d = GizmoDrawer.WorldToScreen(_center);
             string scaleAxisStr = string.Join(string.Empty, _scaleAxes.Select(x => x.axisInfo.Name));
 
+            float fontSize = 18;
+            var offset = Vector2.Zero;
+
+            string text = "Scaling ";
+            GizmoDrawer.Drawlist.AddText(ImGui.GetFont(), fontSize, center2d, 0xFF_FF_FF_FF, text);
+            offset.X += ImGui.CalcTextSize(text).X * fontSize / ImGui.GetFontSize();
+
+            for (int i = 0; i < _scaleAxes.Length; i++)
+            {
+                text = _scaleAxes[i].axisInfo.Name;
+                var color = _scaleAxes[i].axisInfo.Color;
+                GizmoDrawer.Drawlist.AddText(ImGui.GetFont(), fontSize, center2d+offset, color, text);
+                offset.X += ImGui.CalcTextSize(text).X * fontSize / ImGui.GetFontSize();
+            }
             GizmoDrawer.Drawlist.AddText(
                 ImGui.GetFont(), 18,
-                center2d, 0xFF_FF_FF_FF,
-                $"Scaling {scaleAxisStr} : {scaleFactor,5:0.###}x");
+                center2d+offset, 
+                _scaleAxes.Length == 1 ? _scaleAxes[0].axisInfo.Color : 0xFF_FF_FF_FF,
+                $" : {scaleFactor,5:0.###}x");
 
             if (!_isUniformScaling)
             {
