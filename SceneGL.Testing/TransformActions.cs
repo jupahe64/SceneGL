@@ -598,10 +598,21 @@ namespace EditTK
             Debug.Assert(_distanceTracker != null);
 
             var (newDistance, direction) = GetDistanceAndDirection(in view);
-            _distanceTracker.Update(newDistance, isSnapping ? _snappingInterval : null);
+            _distanceTracker.Update(newDistance, null);
+
+            float scaleFactor = _distanceTracker.DeltaScaleFactor;
+
+            if (isSnapping)
+            {
+                float snapping = scaleFactor<1 ? 0.1f : 1;
+                scaleFactor = MathF.Round(scaleFactor / snapping) * snapping;
+            }
 
             float sign = Vector2.Dot(direction, _initialDirection) > 0 ? 1 : -1;
-            float scaleFactor = _distanceTracker.DeltaScaleFactor * sign;
+            scaleFactor *= sign;
+
+            if (scaleFactor == -0)
+                scaleFactor = 0;
 
 
             Vector2 center2d = GizmoDrawer.WorldToScreen(_center);
@@ -672,7 +683,13 @@ namespace EditTK
 
         private (float distance, Vector2 direction) GetDistanceAndDirection(in SceneViewState view)
         {
-            Vector2 vec = view.MousePosition - view.WorldToScreen(_center);
+            Vector3 hitPoint = view.MouseRayHitOnPlane(view.CamForwardVector, _center);
+            Vector3 offset = hitPoint - _center;
+
+            var vec = new Vector2(
+                Vector3.Dot(offset, view.CamRightVector), 
+                Vector3.Dot(offset, view.CamUpVector)
+            );
             float distance = vec.Length();
             return (distance, vec/distance);
         }
