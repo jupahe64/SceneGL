@@ -74,6 +74,9 @@ namespace EditTK
     public record struct Rect(Vector2 TopLeft, Vector2 BottomRight)
     {
         public Vector2 Size => BottomRight - TopLeft;
+        public bool Contains(Vector2 pos) =>
+            TopLeft.X <= pos.X && pos.X <= BottomRight.X &&
+            TopLeft.Y <= pos.Y && pos.Y <= BottomRight.Y;
     }
 
     public record struct CameraState(Vector3 Position, Vector3 ForwardVector, Vector3 UpVector, Quaternion Rotation)
@@ -191,7 +194,61 @@ namespace EditTK
     public static class GizmoDrawer
     {
         [DllImport("cimgui")]
-        private static extern bool igItemHoverable(Rect bb, uint id);
+        private static unsafe extern bool igItemAdd(in Rect bb, uint id, Rect* nav_bb = null, uint extra_flags = 0);
+
+        [DllImport("cimgui")]
+        private static unsafe extern bool igItemHoverable(in Rect bb, uint id);
+
+        private struct AxisPlaneUnion
+        {
+            private bool _isPlane;
+            private int _axisA;
+            private int _axisB;
+
+            private AxisPlaneUnion(bool isPlane, int axisA, int axisB)
+            {
+                _isPlane = isPlane;
+                _axisA = axisA;
+                _axisB = axisB;
+            }
+
+            public static AxisPlaneUnion Axis(int axis) => new(false, axis, -1);
+            public static AxisPlaneUnion Plane(int axisA, int axisB) => new(true, axisA, axisB);
+
+            public bool IsAxis(out int axis)
+            {
+                axis = _axisA;
+                return !_isPlane;
+            }
+
+            public bool IsPlane(out int axisA, out int axisB)
+            {
+                axisA = _axisA;
+                axisB = _axisB;
+                return _isPlane;
+            }
+        }
+
+        private unsafe static void Sort<T>(Span<(float key, T value)> list)
+            where T : unmanaged
+        {
+            //selection sort
+
+            for (int i = 0; i < list.Length-1; i++)
+            {
+                var lowest = i;
+                for (int j = i+1; j < list.Length; j++)
+                {
+                    var key = list[j].key;
+                    if (key < list[lowest].key)
+                    {
+                        lowest = j;
+
+                    }
+                }
+                (list[lowest], list[i]) = (list[i], list[lowest]);
+            }
+        }
 
         //CRITICAL: Do not read from or write to these, unless you understand how they work!
         private static readonly Dictionary<uint, int> __lastFrameHoveredParts__ = new();
@@ -317,9 +374,14 @@ namespace EditTK
                 __lastFrameHoveredParts__[s_itemID] = -1;
         }
 
-        public static void EndGizmoDrawing()
+        public unsafe static void EndGizmoDrawing()
         {
-            bool isHovered = igItemHoverable(s_view.ViewportRect, s_itemID);
+            if (!igItemAdd(s_view.ViewportRect, s_itemID))
+                return;
+
+            igItemHoverable(s_view.ViewportRect, s_itemID);
+
+            bool isHovered = ImGui.IsItemHovered();
 
             __lastFrameHoveredParts__[s_itemID] = -1;
 
@@ -591,6 +653,7 @@ namespace EditTK
             Vector3 center = transformMatrix.Translation;
             Vector2 center2d = WorldToScreen(center);
 
+
             float gizmoScaleFactor = Get3dGizmoScaling(center, 1);
 
             bool AxisGimbal(int axis)
@@ -778,29 +841,63 @@ namespace EditTK
 
                 bool hovered = HoverablePart(MathHelper.IsPointInTriangle(mousePos, center2d, posA, posB));
 
-                var col = hovered ? 0xFF_FF_FF_FF : AdditiveBlend(colA, colB);
+                var col = AdditiveBlend(colA, colB);
 
-                Drawlist.AddTriangleFilled(center2d, posA, posB, ColorWithAlpha(col, 0x55));
-                Drawlist.AddLine(posA, posB, col, 1.5f);
+                Drawlist.AddTriangleFilled(center2d, posA, posB,
+                    ColorWithAlpha(hovered ? 0xFF_FF_FF_FF : col, 0x55)
+                );
+                Drawlist.AddLine(posA, posB, hovered ? HOVER_COLOR : col, 1.5f);
 
                 return hovered;
             }
 
             hoveredAxis = HoveredAxis.NONE;
 
-            if (Plane(0, 1))
-                hoveredAxis = HoveredAxis.XY_PLANE;
-            if (Plane(0, 2))
-                hoveredAxis = HoveredAxis.XZ_PLANE;
-            if (Plane(1, 2))
-                hoveredAxis = HoveredAxis.YZ_PLANE;
+            var axisVecX = s_transformMatVectors[0];
+            var axisVecY = s_transformMatVectors[1];
+            var axisVecZ = s_transformMatVectors[2];
 
-            if (GizmoAxisHandle(center, center2d, mousePos, radius, gizmoScaleFactor, 0))
-                hoveredAxis = HoveredAxis.X_AXIS;
-            if (GizmoAxisHandle(center, center2d, mousePos, radius, gizmoScaleFactor, 1))
-                hoveredAxis = HoveredAxis.Y_AXIS;
-            if (GizmoAxisHandle(center, center2d, mousePos, radius, gizmoScaleFactor, 2))
-                hoveredAxis = HoveredAxis.Z_AXIS;
+            #region best effort depth sorting
+            Span<(float sortKey, (AxisPlaneUnion apu, HoveredAxis ha) value)> items = 
+            stackalloc (float sortKey, (AxisPlaneUnion apu, HoveredAxis ha))[] 
+            {
+                (Vector3.Dot(-s_view.CamForwardVector, axisVecX * 0.5f) + 0.5f, 
+                (AxisPlaneUnion.Axis(0), HoveredAxis.X_AXIS)),
+
+                (Vector3.Dot(-s_view.CamForwardVector, axisVecY * 0.5f) + 0.5f,
+                (AxisPlaneUnion.Axis(1), HoveredAxis.Y_AXIS)),
+
+                (Vector3.Dot(-s_view.CamForwardVector, axisVecZ * 0.5f) + 0.5f,
+                (AxisPlaneUnion.Axis(2), HoveredAxis.Z_AXIS)),
+
+
+                (Vector3.Dot(-s_view.CamForwardVector, (axisVecX+axisVecY)*0.5f),
+                (AxisPlaneUnion.Plane(0, 1), HoveredAxis.XY_PLANE)),
+
+                (Vector3.Dot(-s_view.CamForwardVector, (axisVecX + axisVecZ) * 0.5f),
+                (AxisPlaneUnion.Plane(0, 2), HoveredAxis.XZ_PLANE)),
+
+                (Vector3.Dot(-s_view.CamForwardVector, (axisVecY + axisVecZ) * 0.5f),
+                (AxisPlaneUnion.Plane(1, 2), HoveredAxis.YZ_PLANE))
+            };
+
+            Sort(items);
+            #endregion
+
+            for (int i = 0; i < items.Length; i++)
+            {
+                (AxisPlaneUnion apu, HoveredAxis ha) = items[i].value;
+                if (apu.IsAxis(out int axis))
+                {
+                    if (GizmoAxisHandle(in center, in center2d, in mousePos, radius, gizmoScaleFactor, axis))
+                        hoveredAxis = ha;
+                }
+                else if(apu.IsPlane(out int axisA, out int axisB))
+                {
+                    if (Plane(axisA, axisB))
+                        hoveredAxis = ha;
+                }
+            }
 
             if (HoverableRing(center2d, radius + 10, 6f, false,  0x55_FF_FF_FF, 0x88_FF_FF_FF))
                 hoveredAxis = HoveredAxis.ALL_AXES;
@@ -847,30 +944,64 @@ namespace EditTK
 
                 bool hovered = HoverablePart(MathHelper.IsPointInQuad(mousePos, center2d, posA, posAB, posB));
 
-                var col = hovered ? 0xFF_FF_FF_FF : AdditiveBlend(colA, colB);
+                var col = AdditiveBlend(colA, colB);
 
-                Drawlist.AddQuadFilled(center2d, posA, posAB, posB, ColorWithAlpha(col, 0x55));
-                Drawlist.AddLine(posA, posAB, col, 1.5f);
-                Drawlist.AddLine(posAB, posB, col, 1.5f);
+                Drawlist.AddQuadFilled(center2d, posA, posAB, posB, 
+                    ColorWithAlpha(hovered ? 0xFF_FF_FF_FF : col, 0x55)
+                );
+                Drawlist.AddLine(posA, posAB, hovered ? HOVER_COLOR : col, 1.5f);
+                Drawlist.AddLine(posAB, posB, hovered ? HOVER_COLOR : col, 1.5f);
 
                 return hovered;
             }
 
             hoveredAxis = HoveredAxis.NONE;
 
-            if (Plane(0, 1))
-                hoveredAxis = HoveredAxis.XY_PLANE;
-            if (Plane(0, 2))
-                hoveredAxis = HoveredAxis.XZ_PLANE;
-            if (Plane(1, 2))
-                hoveredAxis = HoveredAxis.YZ_PLANE;
+            var axisVecX = s_transformMatVectors[0];
+            var axisVecY = s_transformMatVectors[1];
+            var axisVecZ = s_transformMatVectors[2];
 
-            if (GizmoAxisHandle(center, center2d, mousePos, lineLength, gizmoScaleFactor, 0, true))
-                hoveredAxis = HoveredAxis.X_AXIS;
-            if (GizmoAxisHandle(center, center2d, mousePos, lineLength, gizmoScaleFactor, 1, true))
-                hoveredAxis = HoveredAxis.Y_AXIS;
-            if (GizmoAxisHandle(center, center2d, mousePos, lineLength, gizmoScaleFactor, 2, true))
-                hoveredAxis = HoveredAxis.Z_AXIS;
+            #region best effort depth sorting
+            Span<(float sortKey, (AxisPlaneUnion apu, HoveredAxis ha) value)> items =
+            stackalloc (float sortKey, (AxisPlaneUnion apu, HoveredAxis ha))[]
+            {
+                (Vector3.Dot(-s_view.CamForwardVector, axisVecX * 0.5f) + 0.5f,
+                (AxisPlaneUnion.Axis(0), HoveredAxis.X_AXIS)),
+
+                (Vector3.Dot(-s_view.CamForwardVector, axisVecY * 0.5f) + 0.5f,
+                (AxisPlaneUnion.Axis(1), HoveredAxis.Y_AXIS)),
+
+                (Vector3.Dot(-s_view.CamForwardVector, axisVecZ * 0.5f) + 0.5f,
+                (AxisPlaneUnion.Axis(2), HoveredAxis.Z_AXIS)),
+
+
+                (Vector3.Dot(-s_view.CamForwardVector, (axisVecX + axisVecY) * 0.5f),
+                (AxisPlaneUnion.Plane(0, 1), HoveredAxis.XY_PLANE)),
+
+                (Vector3.Dot(-s_view.CamForwardVector, (axisVecX + axisVecZ) * 0.5f),
+                (AxisPlaneUnion.Plane(0, 2), HoveredAxis.XZ_PLANE)),
+
+                (Vector3.Dot(-s_view.CamForwardVector, (axisVecY + axisVecZ) * 0.5f),
+                (AxisPlaneUnion.Plane(1, 2), HoveredAxis.YZ_PLANE))
+            };
+
+            Sort(items);
+            #endregion
+
+            for (int i = 0; i < items.Length; i++)
+            {
+                (AxisPlaneUnion apu, HoveredAxis ha) = items[i].value;
+                if (apu.IsAxis(out int axis))
+                {
+                    if (GizmoAxisHandle(in center, in center2d, in mousePos, lineLength, gizmoScaleFactor, axis, true))
+                        hoveredAxis = ha;
+                }
+                else if (apu.IsPlane(out int axisA, out int axisB))
+                {
+                    if (Plane(axisA, axisB))
+                        hoveredAxis = ha;
+                }
+            }
 
             if (HoverableCircle(center2d, 5, 0xFF_FF_FF_FF, HOVER_COLOR))
                 hoveredAxis = HoveredAxis.FREE;

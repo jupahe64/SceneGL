@@ -109,7 +109,7 @@ namespace SceneGL.Testing
 
                 lock (_glLock)
                 {
-                    _imguiController = new ImGuiController(_gl, _window, _input);
+                    _imguiController = new ImGuiController(_gl, _window, _input, SetupFonts);
                 }
 
                 var win32 = _window.Native!.Win32;
@@ -447,11 +447,12 @@ namespace SceneGL.Testing
                         Vector3.Transform(Vector3.UnitY, rotAnimated),
                         rotAnimated);
 
+                var winPos = ImGui.GetWindowPos();
 
                 float yScale = 1.0f / (float)Math.Tan(fov * 0.5f);
                 float xScale = yScale / aspectRatio;
 
-                Vector2 ndcMousePos = ((mousePos-topLeft) / size * 2 - Vector2.One) * new Vector2(1, -1);
+                Vector2 ndcMousePos = ((mousePos-topLeft-winPos) / size * 2 - Vector2.One) * new Vector2(1, -1);
 
                 Vector3 mouseRayDirection = Vector3.Transform(
                     Vector3.Normalize(new(
@@ -460,7 +461,10 @@ namespace SceneGL.Testing
                         -1
                     )) , rotAnimated);
 
-                var viewState = new SceneViewState(cameraState, _viewProjection, new Rect(topLeft, topLeft + size),
+                
+
+                var viewState = new SceneViewState(cameraState, _viewProjection, 
+                    new Rect(topLeft + winPos, topLeft + winPos + size),
                     mousePos, mouseRayDirection);
 
                 GizmoDrawer.BeginGizmoDrawing("scene_gizmos", ImGui.GetWindowDrawList(), in viewState);
@@ -573,7 +577,7 @@ namespace SceneGL.Testing
                 ImGui.EndChild();
             }
 
-            if (!isRightDragging)
+            if (!ImGui.IsMouseDragging(ImGuiMouseButton.Left) && !ImGui.IsMouseDragging(ImGuiMouseButton.Right))
             {
                 _isSceneHoveredBeforeDrag = isSceneHovered;
             }
