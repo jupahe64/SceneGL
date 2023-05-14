@@ -92,8 +92,20 @@ namespace SceneGL.Testing
 
                 _window.Title = $"SceneGL.Testing OpenGL {_gl.GetStringS(StringName.Version)} {_gl.GetStringS(StringName.Vendor)}";
 
+                unsafe static void SetupFonts()
+                {
+                    var fontPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                            "res", "Quicksand-SemiBold.ttf");
 
+                    var nativeConfig = ImGuiNative.ImFontConfig_ImFontConfig();
+                    //Add a higher horizontal/vertical sample rate for global scaling.
+                    nativeConfig->OversampleH = 8;
+                    nativeConfig->OversampleV = 8;
+                    nativeConfig->RasterizerMultiply = 1f;
+                    nativeConfig->GlyphOffset = new Vector2(0);
 
+                    ImGui.GetIO().Fonts.AddFontFromFileTTF(fontPath, 18, nativeConfig);
+                }
 
                 lock (_glLock)
                 {
