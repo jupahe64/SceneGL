@@ -64,19 +64,24 @@ namespace SceneGL.GLHelpers
             });
 
         public static uint Create1PixelTexure2D(GL gl, byte r, byte g, byte b) =>
-            CreateTexture2D<Rgba32>(gl, InternalFormat.Rgba8, 1, 1, PixelFormat.Rgba, stackalloc Rgba32[]
+            CreateTexture2D<Rgba32>(gl, PixelFormat.R8_G8_B8_A8_UNorm, 1, 1, stackalloc Rgba32[]
                 {
                     new Rgba32(r, g, b, 255)
                 }, false);
 
-        public static uint CreateTexture2D<TPixel>(GL gl, InternalFormat internalformat,
-            uint width, uint height, PixelFormat format, ReadOnlySpan<TPixel> pixels, bool generateMipmaps)
+        public static uint CreateTexture2D<TPixel>(GL gl, PixelFormat format,
+            uint width, uint height, ReadOnlySpan<TPixel> pixels, bool generateMipmaps)
             where TPixel : unmanaged
         {
             uint texture = gl.GenTexture();
             gl.BindTexture(TextureTarget.Texture2D, texture);
 
-            gl.TexImage2D(TextureTarget.Texture2D, 0, internalformat, width, height, 0, format, PixelType.UnsignedByte, pixels);
+            gl.TexImage2D(TextureTarget.Texture2D, 0, 
+                TextureFormats.VdToGLInternalFormat(format), 
+                width, height, 0, 
+                TextureFormats.VdToGLPixelFormat(format), 
+                TextureFormats.VdToPixelType(format), 
+                pixels);
 
             if (generateMipmaps)
                 gl.GenerateMipmap(TextureTarget.Texture2D);
@@ -85,8 +90,8 @@ namespace SceneGL.GLHelpers
             return texture;
         }
 
-        public static uint CreateTexture2D<TPixel, TImageSource>(GL gl, InternalFormat internalformat,
-            PixelFormat format, IReadOnlyList<(TPixel[] pixels, uint width, uint height)> mipLevels)
+        public static uint CreateTexture2D<TPixel, TImageSource>(GL gl, PixelFormat format, 
+            IReadOnlyList<(TPixel[] pixels, uint width, uint height)> mipLevels)
             where TPixel : unmanaged
         {
             uint texture = gl.GenTexture();
@@ -96,20 +101,27 @@ namespace SceneGL.GLHelpers
             {
                 var (pixels, width, height) = mipLevels[i];
 
-                gl.TexImage2D<TPixel>(TextureTarget.Texture2D, i, internalformat, width, height, 0, format, PixelType.UnsignedByte, pixels);
+                gl.TexImage2D<TPixel>(TextureTarget.Texture2D, i,
+                TextureFormats.VdToGLInternalFormat(format),
+                width, height, 0,
+                TextureFormats.VdToGLPixelFormat(format),
+                TextureFormats.VdToPixelType(format),
+                pixels);
             }
 
             gl.BindTexture(TextureTarget.Texture2D, 0);
             return texture;
         }
 
-        public static uint CreateTexture2DCompressed(GL gl, InternalFormat internalformat,
+        public static uint CreateTexture2DCompressed(GL gl, PixelFormat format,
             uint width, uint height, ReadOnlySpan<byte> data, bool generateMipmaps)
         {
             uint texture = gl.GenTexture();
             gl.BindTexture(TextureTarget.Texture2D, texture);
 
-            gl.CompressedTexImage2D(TextureTarget.Texture2D, 0, internalformat, width, height, 0, data);
+            gl.CompressedTexImage2D(TextureTarget.Texture2D, 0,
+            TextureFormats.VdToGLInternalFormat(format),
+            width, height, 0, data);
 
             if (generateMipmaps)
                 gl.GenerateMipmap(TextureTarget.Texture2D);
@@ -118,7 +130,7 @@ namespace SceneGL.GLHelpers
             return texture;
         }
 
-        public static uint CreateTexture2DCompressed(GL gl, InternalFormat internalformat,
+        public static uint CreateTexture2DCompressed(GL gl, PixelFormat format,
             IReadOnlyList<(byte[] data, uint width, uint height)> mipLevels)
         {
             uint texture = gl.GenTexture();
@@ -128,7 +140,9 @@ namespace SceneGL.GLHelpers
             {
                 var (data, width, height) = mipLevels[i];
 
-                gl.CompressedTexImage2D<byte>(TextureTarget.Texture2D, i, internalformat, width, height, 0, data);
+                gl.CompressedTexImage2D<byte>(TextureTarget.Texture2D, i,
+                TextureFormats.VdToGLInternalFormat(format),
+                width, height, 0, data);
             }
 
             gl.BindTexture(TextureTarget.Texture2D, 0);

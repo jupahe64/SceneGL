@@ -108,8 +108,8 @@ namespace SceneGL.Testing
 
                 image.CopyPixelDataTo(pixelData);
 
-                s_texture = TextureHelper.CreateTexture2D<Rgba32>(gl, InternalFormat.Rgba, (uint)image.Width, (uint)image.Height,
-                    PixelFormat.Rgba, pixelData, true);
+                s_texture = TextureHelper.CreateTexture2D<Rgba32>(gl, PixelFormat.R8_G8_B8_A8_UNorm, (uint)image.Width, (uint)image.Height,
+                    pixelData, true);
             }
 
             s_sampler = SamplerHelper.CreateMipMapSampler2D(gl, lodBias: -3);

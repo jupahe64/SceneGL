@@ -6,28 +6,29 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+
 namespace SceneGL.GLWrappers
 {
     public class Framebuffer
     {
         private uint _framebuffer;
 
-        private (InternalFormat internalFormat, uint texture)? _depthAttachment;
+        private (PixelFormat format, uint texture)? _depthAttachment;
 
-        private (InternalFormat internalFormat, PixelFormat format, FramebufferAttachment attachment, uint texture)[] _colorAttachments;
+        private (PixelFormat format, FramebufferAttachment attachment, uint texture)[] _colorAttachments;
         private uint _width = 0;
         private uint _height = 0;
         private uint _requestedWidth;
         private uint _requestedHeight;
 
-        public Framebuffer(Vector2D<uint>? initialSize, InternalFormat? depthAttachment, params InternalFormat[] colorAttachments)
+        public Framebuffer(Vector2D<uint>? initialSize, PixelFormat? depthAttachment, params PixelFormat[] colorAttachments)
         {
             if (depthAttachment != null)
             {
                 _depthAttachment = (depthAttachment.Value, 0);
             }
 
-            _colorAttachments = new (InternalFormat internalFormat, PixelFormat format,
+            _colorAttachments = new (PixelFormat format,
                 FramebufferAttachment attachment, uint texture)[colorAttachments.Length];
 
 
@@ -35,7 +36,7 @@ namespace SceneGL.GLWrappers
             for (int i = 0; i < colorAttachments.Length; i++)
             {
                 var format = colorAttachments[i];
-                _colorAttachments[i] = (format, PixelFormat.Rgba,
+                _colorAttachments[i] = (format,
                     (FramebufferAttachment)((int)FramebufferAttachment.ColorAttachment0 + i), 0);
             }
             _requestedWidth = initialSize?.X ?? 0;
@@ -92,7 +93,7 @@ namespace SceneGL.GLWrappers
 
             if (_depthAttachment != null)
             {
-                var (internalF, texture) = _depthAttachment.Value;
+                var (format, texture) = _depthAttachment.Value;
 
                 if (texture == 0)
                     texture = gl.GenTexture();
@@ -100,8 +101,12 @@ namespace SceneGL.GLWrappers
                 gl.BindTexture(TextureTarget.Texture2D, texture);
                 unsafe
                 {
-                    gl.TexImage2D(TextureTarget.Texture2D, 0, internalF, width, height, 0,
-                    PixelFormat.DepthStencil, GLEnum.UnsignedInt248, null);
+                    gl.TexImage2D(TextureTarget.Texture2D, 0,
+                    TextureFormats.VdToGLInternalFormat(format),
+                    width, height, 0,
+                    TextureFormats.VdToGLPixelFormat(format),
+                    TextureFormats.VdToPixelType(format), 
+                    null);
                 }
 
                 gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
@@ -112,12 +117,12 @@ namespace SceneGL.GLWrappers
                 gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthStencilAttachment,
                     TextureTarget.Texture2D, texture, 0);
 
-                _depthAttachment = (internalF, texture);
+                _depthAttachment = (format, texture);
             }
 
             for (int i = 0; i < _colorAttachments.Length; i++)
             {
-                var (internalF, format, attachment, texture) = _colorAttachments[i];
+                var (format, attachment, texture) = _colorAttachments[i];
 
                 if (texture == 0)
                     texture = gl.GenTexture();
@@ -125,8 +130,12 @@ namespace SceneGL.GLWrappers
                 gl.BindTexture(TextureTarget.Texture2D, texture);
                 unsafe
                 {
-                    gl.TexImage2D(TextureTarget.Texture2D, 0, internalF, width, height, 0,
-                    format, GLEnum.UnsignedByte, null);
+                    gl.TexImage2D(TextureTarget.Texture2D, 0,
+                    TextureFormats.VdToGLInternalFormat(format),
+                    width, height, 0,
+                    TextureFormats.VdToGLPixelFormat(format),
+                    TextureFormats.VdToPixelType(format), 
+                    null);
                 }
 
                 gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
@@ -136,7 +145,7 @@ namespace SceneGL.GLWrappers
 
                 gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, attachment, TextureTarget.Texture2D, texture, 0);
 
-                _colorAttachments[i] = (internalF, format, attachment, texture);
+                _colorAttachments[i] = (format, attachment, texture);
             }
 
             gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);

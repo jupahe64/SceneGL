@@ -248,8 +248,8 @@ namespace SceneGL.Testing
 
                     Debug.WriteLine(messageContent);
 
-                    //if (severity != GLEnum.DebugSeverityNotification)
-                    //    Debugger.Break();
+                    if (severity != GLEnum.DebugSeverityNotification)
+                        Debugger.Break();
                 },
                 ReadOnlySpan<byte>.Empty);
             }
@@ -261,7 +261,7 @@ namespace SceneGL.Testing
             _gl.Enable(EnableCap.DepthTest);
             _gl.DepthFunc(DepthFunction.Gequal);
 
-            _sceneFB = new Framebuffer(null, InternalFormat.DepthStencil, InternalFormat.Rgb);
+            _sceneFB = new Framebuffer(null, PixelFormat.D24_UNorm_S8_UInt, PixelFormat.R8_G8_B8_A8_UNorm);
 
             ColoredTriangle.Initialize(_gl);
             Instances.Initialize(_gl);
