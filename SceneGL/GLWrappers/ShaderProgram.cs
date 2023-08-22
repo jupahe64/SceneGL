@@ -38,7 +38,7 @@ namespace SceneGL.GLWrappers
 
         public event ShaderSourceUpdate? Update;
     }
-    public record UniformInfo(string Name, UniformType Type, int Location);
+    public record UniformInfo(string Name, UniformType Type, int Location, int ElementCount = 1);
 
     public delegate void CompilationFailedHandler(Dictionary<ShaderSource, string> shaderErrors, string linkingError);
 
@@ -319,6 +319,19 @@ namespace SceneGL.GLWrappers
                 _uniformLocations[name] = location;
 
                 infos[i] = new(name, type, location);
+
+                if (size > 1)
+                {
+                    string uniformName = name[..^("[0]".Length)];
+                    infos[i] = new(uniformName, type, location, size);
+
+                    for (int j = 1; j < size; j++)
+                    {
+                        name = $"{uniformName}[{j}]";
+                        location = gl.GetUniformLocation(program, name);
+                        _uniformLocations[name] = location;
+                    }
+                }
             }
 
             _uniformInfos = infos;
