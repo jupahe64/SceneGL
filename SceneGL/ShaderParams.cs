@@ -133,7 +133,7 @@ namespace SceneGL
         /// </summary>
         /// <param name="gl"></param>
         /// <returns></returns>
-        public BufferRange GetDataBuffer(GL gl)
+        public unsafe BufferRange GetDataBuffer(GL gl)
         {
             if (_dataBuffer == 0)
                 _dataBuffer = gl.GenBuffer();
@@ -154,7 +154,7 @@ namespace SceneGL
                 gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
             }
 
-            return new BufferRange(_dataBuffer, 0, (uint)_data.Length);
+            return new BufferRange(_dataBuffer, 0, (uint)(sizeof(T)*_data.Length));
         }
     }
 
