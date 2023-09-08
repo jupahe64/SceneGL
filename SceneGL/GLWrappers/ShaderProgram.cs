@@ -160,6 +160,16 @@ namespace SceneGL.GLWrappers
             {
                 gl.CompileShader(shader);
                 gl.AttachShader(program, shader);
+
+                gl.GetShader(shader, ShaderParameterName.ShaderType, out var shaderType);
+                if (shaderType!=(uint)ShaderType.FragmentShader || FragShaderOutputBindings == null)
+                    continue;
+
+                for (int i = 0; i < FragShaderOutputBindings.Count; i++)
+                {
+                    var (name, attachment) = FragShaderOutputBindings[i];
+                    gl.BindFragDataLocation(program, attachment, name);
+                }
             }
 
             gl.LinkProgram(program);
@@ -247,15 +257,6 @@ namespace SceneGL.GLWrappers
 
                     if (entry.program != 0)
                         gl.DeleteProgram(entry.program);
-
-                    if (FragShaderOutputBindings == null)
-                        return true;
-
-                    for (int i = 0; i < FragShaderOutputBindings.Count; i++)
-                    {
-                        var (name, attachment) = FragShaderOutputBindings[i];
-                        gl.BindFragDataLocation(program, attachment, name);
-                    }
 
                     return true;
                 }
