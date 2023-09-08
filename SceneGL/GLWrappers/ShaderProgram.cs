@@ -52,7 +52,7 @@ namespace SceneGL.GLWrappers
         {
             None,
             /// <summary>
-            /// There is source code availible that the shader program wasn't compiled with yet
+            /// There is source code available that the shader program wasn't compiled with yet
             /// </summary>
             IsDirty,
             /// <summary>
@@ -86,6 +86,7 @@ namespace SceneGL.GLWrappers
 
         private List<CompileResultCallback> _compileResultCallbacks = new();
 
+        public IReadOnlyList<(string fragShaderOutput, uint colorAttachment)>? FragShaderOutputBindings { init; get; }
 
         public ShaderProgram(params ShaderSource[] sources)
         {
@@ -99,22 +100,24 @@ namespace SceneGL.GLWrappers
 
         private void OnSourceUpdated(CompileResultCallback resultCallback)
         {
-            if(_shaderProgram.HasValue)
+            foreach(var (key, entry) in _shaderPrograms)
             {
-                var (program, resourceState) = _shaderProgram.Value;
-
-                _shaderProgram = (program, resourceState | ResourceState.IsDirty);
+                _shaderPrograms[key] = entry with { 
+                    state = entry.state | ResourceState.IsDirty 
+                };
             }
 
             _compileResultCallbacks.Add(resultCallback);
         }
 
-        public static ShaderProgram FromVertexFragmentSource((string? name, string source) vertexSource, (string? name, string source) fragmentSource)
+        public static ShaderProgram FromVertexFragmentSource((string? name, string source) vertexSource, (string? name, string source) fragmentSource,
+            IReadOnlyList<(string fragShaderOutput, uint colorAttachment)>? fragShaderOutputBindings = null)
         {
             return new(
                 new(vertexSource.name, ShaderType.VertexShader, vertexSource.source),
                 new(fragmentSource.name, ShaderType.FragmentShader, fragmentSource.source)
-            );
+            )
+            { FragShaderOutputBindings = fragShaderOutputBindings };
         }
 
         private bool TryCreateAndCompileProgram(GL gl, out uint program)
@@ -246,10 +249,13 @@ namespace SceneGL.GLWrappers
                     if (entry.program != 0)
                         gl.DeleteProgram(entry.program);
 
-                    foreach (var (name, binding) in _uniformBlockBindings)
+                    if (FragShaderOutputBindings == null)
+                        return true;
+
+                    for (int i = 0; i < FragShaderOutputBindings.Count; i++)
                     {
-                        if (_uniformBlockIndices!.TryGetValue(name, out uint index))
-                            gl.UniformBlockBinding(program, index, binding);
+                        var (name, attachment) = FragShaderOutputBindings[i];
+                        gl.BindFragDataLocation(program, attachment, name);
                     }
 
                     return true;
