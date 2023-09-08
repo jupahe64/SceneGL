@@ -65,6 +65,8 @@ namespace SceneGL.GLWrappers
 
         private (uint program, ResourceState state)? _shaderProgram = null;
 
+        private Dictionary<CodeWrappers, (uint program, ResourceState state)> _shaderPrograms = new();
+
         private Dictionary<string, int>? _uniformLocations = null;
         private Dictionary<string, uint>? _uniformBlockIndices = null;
 
