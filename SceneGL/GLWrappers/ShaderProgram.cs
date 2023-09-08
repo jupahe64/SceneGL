@@ -61,8 +61,6 @@ namespace SceneGL.GLWrappers
             IsReadyToUse
         }
 
-        private Dictionary<string, uint> _uniformBlockBindings = new();
-
         private (uint program, ResourceState state)? _shaderProgram = null;
 
         private Dictionary<CodeWrappers, (uint program, ResourceState state)> _shaderPrograms = new();
@@ -102,12 +100,13 @@ namespace SceneGL.GLWrappers
 
         private void OnSourceUpdated(CompileResultCallback resultCallback)
         {
-            foreach(var (key, entry) in _shaderPrograms)
-            {
-                _shaderPrograms[key] = entry with { 
-                    state = entry.state | ResourceState.IsDirty 
-                };
-            }
+            if (_shaderProgram == null)
+                return;
+
+            _shaderProgram = _shaderProgram!.Value with 
+            { 
+                state = _shaderProgram!.Value.state | ResourceState.IsDirty 
+            };
 
             _compileResultCallbacks.Add(resultCallback);
         }
