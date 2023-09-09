@@ -85,6 +85,8 @@ namespace SceneGL.GLWrappers
 
         private (PixelFormat format, FramebufferAttachment attachment, uint texture)[] _colorAttachments;
         private DrawBufferMode[] _colorAttachmentDrawBufferModes;
+        public uint TextureWidth => _width;
+        public uint TextureHeight => _height;
         private uint _width = 0;
         private uint _height = 0;
         private uint _requestedWidth;
