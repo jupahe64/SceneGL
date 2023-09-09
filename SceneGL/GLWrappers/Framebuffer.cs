@@ -85,8 +85,6 @@ namespace SceneGL.GLWrappers
 
         private (PixelFormat format, FramebufferAttachment attachment, uint texture)[] _colorAttachments;
         private DrawBufferMode[] _colorAttachmentDrawBufferModes;
-        public uint TextureWidth => _width;
-        public uint TextureHeight => _height;
         private uint _width = 0;
         private uint _height = 0;
         private uint _requestedWidth;
@@ -115,6 +113,13 @@ namespace SceneGL.GLWrappers
             _requestedHeight = initialSize?.Y ?? 0;
         }
 
+        public uint GetDepthStencilTexture(out uint width, out uint height)
+        {
+            width = _width;
+            height = _height;
+            return DepthStencilTexture;
+        }
+
         public uint DepthStencilTexture
         {
             get
@@ -126,6 +131,13 @@ namespace SceneGL.GLWrappers
 
                 return _depthAttachment.Value.texture;
             }
+        }
+
+        public uint GetColorTexture(int attachment, out uint width, out uint height)
+        {
+            width = _width;
+            height = _height;
+            return GetColorTexture(attachment);
         }
 
         public uint GetColorTexture(int attachment)
