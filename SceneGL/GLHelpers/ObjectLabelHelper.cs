@@ -38,11 +38,10 @@ namespace SceneGL.GLHelpers
             byte[] bytes = Encoding.UTF8.GetBytes(label);
 
             int maxLength = gl.GetInteger((GLEnum)GetPName.MaxLabelLength);
+            int clampedByteCount = Math.Min(bytes.Length, maxLength);
 
-            if(bytes.Length > maxLength)
-                throw new ArgumentException($"Object Label {label} exceeds the allowed number bytes ({maxLength})");
-
-            gl.ObjectLabel(identifier, name, (uint)bytes.Length, bytes);
+            if(clampedByteCount > 0)
+                gl.ObjectLabel(identifier, name, (uint)clampedByteCount, bytes);
         }
     }
 }
